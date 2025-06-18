@@ -179,3 +179,120 @@ enum SearchEntityType {
     case airline
     case unknown
 }
+
+// MARK: - Flight Detail Response Models
+struct FlightDetailResponse: Codable {
+    let result: FlightDetail
+}
+
+struct FlightDetail: Codable {
+    let greatCircleDistance: GreatCircleDistance
+    let departure: FlightLocation
+    let arrival: FlightLocation
+    let lastUpdated: String
+    let flightIata: String
+    let callSign: String?
+    let status: String
+    let codeshareStatus: String
+    let isCargo: Bool
+    let aircraft: Aircraft?
+    let airline: FlightDetailAirline
+    
+    enum CodingKeys: String, CodingKey {
+        case greatCircleDistance = "great_circle_distance"
+        case departure, arrival
+        case lastUpdated = "last_updated"
+        case flightIata = "flight_iata"
+        case callSign = "call_sign"
+        case status
+        case codeshareStatus = "codeshare_status"
+        case isCargo = "is_cargo"
+        case aircraft, airline
+    }
+}
+
+struct GreatCircleDistance: Codable {
+    let meter: Double
+    let km: Double
+    let mile: Double
+    let nm: Double
+    let feet: Double
+}
+
+struct FlightLocation: Codable {
+    let airport: FlightDetailAirport
+    let scheduled: FlightTime
+    let estimated: FlightTime?
+    let taxiing: FlightTime?
+    let actual: FlightTime?
+    let terminal: String?
+    let gate: String?
+    let baggageBelt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case airport, scheduled, estimated, taxiing, actual, terminal, gate
+        case baggageBelt = "baggage_belt"
+    }
+}
+
+struct FlightDetailAirport: Codable {
+    let iataCode: String
+    let icaoCode: String
+    let name: String
+    let country: String
+    let countryCode: String
+    let isInternational: Bool
+    let isMajor: Bool
+    let city: String
+    let location: FlightTrackLocation
+    let timezone: FlightTrackTimezone
+    
+    enum CodingKeys: String, CodingKey {
+        case iataCode = "iata_code"
+        case icaoCode = "icao_code"
+        case name, country
+        case countryCode = "country_code"
+        case isInternational = "is_international"
+        case isMajor = "is_major"
+        case city, location, timezone
+    }
+}
+
+struct FlightTime: Codable {
+    let utc: String?
+    let local: String?
+}
+
+struct Aircraft: Codable {
+    // Add aircraft properties if needed based on API response
+}
+
+struct FlightDetailAirline: Codable {
+    let name: String
+    let iataCode: String
+    let icaoCode: String
+    let isInternational: Bool
+    let website: String
+    let country: String
+    let callsign: String
+    let isPassenger: Bool
+    let isCargo: Bool
+    let totalAircrafts: Int
+    let averageFleetAge: Double
+    let accidentsLast5y: Int
+    let crashesLast5y: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case name
+        case iataCode = "iata_code"
+        case icaoCode = "icao_code"
+        case isInternational = "is_international"
+        case website, country, callsign
+        case isPassenger = "is_passenger"
+        case isCargo = "is_cargo"
+        case totalAircrafts = "total_aircrafts"
+        case averageFleetAge = "average_fleet_age"
+        case accidentsLast5y = "accidents_last_5y"
+        case crashesLast5y = "crashes_last_5y"
+    }
+}

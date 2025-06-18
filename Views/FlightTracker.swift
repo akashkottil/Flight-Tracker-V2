@@ -177,7 +177,13 @@ struct FlightTrackerScreen: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(scheduleResults.indices, id: \.self) { index in
-                                flightRowView(scheduleResults[index])
+                                NavigationLink(destination: FlightDetailScreen(
+                                    flightNumber: scheduleResults[index].flightNumber,
+                                    date: getSelectedDateForAPI()
+                                )) {
+                                    flightRowContent(scheduleResults[index])
+                                }
+                                .buttonStyle(PlainButtonStyle())
                                 
                                 if index < scheduleResults.count - 1 {
                                     Divider()
@@ -283,7 +289,13 @@ struct FlightTrackerScreen: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(scheduleResults.indices, id: \.self) { index in
-                        flightRowView(scheduleResults[index])
+                        NavigationLink(destination: FlightDetailScreen(
+                            flightNumber: scheduleResults[index].flightNumber,
+                            date: getCurrentDateForAPI()
+                        )) {
+                            flightRowContent(scheduleResults[index])
+                        }
+                        .buttonStyle(PlainButtonStyle())
                         
                         if index < scheduleResults.count - 1 {
                             Divider()
@@ -304,7 +316,13 @@ struct FlightTrackerScreen: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(flightData.indices, id: \.self) { index in
-                        flightRowView(flightData[index])
+                        NavigationLink(destination: FlightDetailScreen(
+                            flightNumber: flightData[index].flightNumber,
+                            date: getCurrentDateForAPI()
+                        )) {
+                            flightRowContent(flightData[index])
+                        }
+                        .buttonStyle(PlainButtonStyle())
                         
                         if index < flightData.count - 1 {
                             Divider()
@@ -517,75 +535,73 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    private func flightRowView(_ flight: FlightInfo) -> some View {
-        NavigationLink(destination: FlightDetailScreen()) {
-            HStack(alignment: .top, spacing: 12) {
-                Image("FlightTrackLogo")
+    // Create a separate content view for reusability
+    private func flightRowContent(_ flight: FlightInfo) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image("FlightTrackLogo")
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(flight.flightNumber)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.black)
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(flight.flightNumber)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.black)
-                    
-                    Text(flight.airline)
-                        .font(.system(size: 14))
-                        .fontWeight(.semibold)
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .center, spacing: 2) {
-                    Text(flight.destination)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.black)
-                    
-                    Text(flight.destinationName)
-                        .font(.system(size: 12))
-                        .fontWeight(.semibold)
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(flight.time)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.black)
-                    
-                    Text(flight.scheduledTime)
-                        .font(.system(size: 12))
-                        .fontWeight(.semibold)
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(flight.status.displayText)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(flight.status == .cancelled ? .white : .rainForest)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(
-                            flight.status == .cancelled ? Color.red : Color.clear
-                        )
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(flight.status == .cancelled ? Color.red : Color.rainForest, lineWidth: 1)
-                        )
-
-                    if !flight.delay.isEmpty {
-                        Text(flight.delay)
-                            .font(.system(size: 12))
-                            .foregroundColor(flight.status.delayColor)
-                    }
-                }.frame(width: 70, height: 34)
+                Text(flight.airline)
+                    .font(.system(size: 14))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.gray)
             }
-            .padding(.vertical, 12)
+            
+            Spacer()
+            
+            VStack(alignment: .center, spacing: 2) {
+                Text(flight.destination)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text(flight.destinationName)
+                    .font(.system(size: 12))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(flight.time)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text(flight.scheduledTime)
+                    .font(.system(size: 12))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(flight.status.displayText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(flight.status == .cancelled ? .white : .rainForest)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(
+                        flight.status == .cancelled ? Color.red : Color.clear
+                    )
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(flight.status == .cancelled ? Color.red : Color.rainForest, lineWidth: 1)
+                    )
+
+                if !flight.delay.isEmpty {
+                    Text(flight.delay)
+                        .font(.system(size: 12))
+                        .foregroundColor(flight.status.delayColor)
+                }
+            }.frame(width: 70, height: 34)
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(.vertical, 12)
     }
     
     // MARK: - Helper Methods
@@ -681,6 +697,22 @@ struct FlightTrackerScreen: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd"
         return formatter.string(from: date)
+    }
+    
+    // Helper methods for navigation
+    private func getCurrentDateForAPI() -> String {
+        // Return current date in YYYYMMDD format
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.string(from: Date())
+    }
+    
+    // For tracked flights, use the selected date instead
+    private func getSelectedDateForAPI() -> String {
+        guard let selectedDate = trackedSelectedDate else {
+            return getCurrentDateForAPI()
+        }
+        return convertDateToAPIFormat(selectedDate)
     }
     
     @MainActor

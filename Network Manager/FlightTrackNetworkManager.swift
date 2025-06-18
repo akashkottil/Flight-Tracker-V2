@@ -133,6 +133,130 @@ class FlightTrackNetworkManager {
             throw FlightTrackNetworkError.decodingError(error)
         }
     }
+    
+    func fetchFlightDetail(flightNumber: String, date: String) async throws -> FlightDetailResponse {
+        // Parse flight number to separate airline code and flight number
+        let (airlineId, cleanFlightNumber) = parseFlightNumber(flightNumber)
+        
+        // Validate parsed components
+        guard !airlineId.isEmpty && !cleanFlightNumber.isEmpty else {
+            print("❌ Failed to parse flight number: \(flightNumber)")
+            throw FlightTrackNetworkError.invalidURL
+        }
+        
+        var urlComponents = URLComponents(string: "\(baseURL)/v2/flight/")!
+        urlComponents.queryItems = [
+            URLQueryItem(name: "airline_id", value: airlineId),
+            URLQueryItem(name: "flight_number", value: cleanFlightNumber),
+            URLQueryItem(name: "date", value: date)
+        ]
+        
+        guard let url = urlComponents.url else {
+            throw FlightTrackNetworkError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "accept")
+        request.addValue("v3Yue9c38cnNCoD19M9mWxOdXHWoAyofjsRmKOzzMq0rZ2cp4yH2irOOdjG4SMqs", forHTTPHeaderField: "X-CSRFToken")
+        request.addValue(authorization, forHTTPHeaderField: "Authorization")
+        
+        print("🌐 Flight Detail API URL: \(url)")
+        print("📋 Original: '\(flightNumber)' → Airline: '\(airlineId)', Flight: '\(cleanFlightNumber)', Date: \(date)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw FlightTrackNetworkError.invalidResponse
+        }
+        
+        guard 200...299 ~= httpResponse.statusCode else {
+            print("❌ Flight detail fetch failed with status: \(httpResponse.statusCode)")
+            
+            // Log response body for debugging
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("💥 Error response: \(responseString)")
+            }
+            
+            throw FlightTrackNetworkError.serverError(httpResponse.statusCode)
+        }
+        
+        do {
+            let flightDetailResponse = try JSONDecoder().decode(FlightDetailResponse.self, from: data)
+            print("✅ Successfully decoded flight detail")
+            return flightDetailResponse
+        } catch {
+            print("❌ Flight detail decoding error: \(error)")
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("📄 Raw JSON response: \(jsonString)")
+            }
+            throw FlightTrackNetworkError.decodingError(error)
+        }
+    }
+    
+    // COMPLETELY NEW PARSING METHOD - NO OLD CODE
+    private func parseFlightNumber(_ flightNumber: String) -> (airlineId: String, flightNumber: String) {
+        let input = flightNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        print("🔍 PARSING: '\(input)'")
+        
+        // STEP 1: Handle space-separated format (e.g., "6E 703")
+        if input.contains(" ") {
+            let components = input.components(separatedBy: " ")
+            if components.count >= 2 && components[0].count == 2 {
+                print("✅ SPACE FORMAT: '\(components[0])' + '\(components[1])'")
+                return (airlineId: components[0], flightNumber: components[1])
+            }
+        }
+        
+        // STEP 2: Handle no-space format - ALWAYS split at position 2
+        if input.count >= 3 {
+            let airline = String(input.prefix(2))
+            let flight = String(input.dropFirst(2))
+            
+            // Validate: airline must have at least 1 letter, flight must be all digits
+            let airlineValid = airline.contains { $0.isLetter }
+            let flightValid = flight.allSatisfy { $0.isNumber }
+            
+            if airlineValid && flightValid {
+                print("✅ FIXED SPLIT: '\(airline)' + '\(flight)'")
+                return (airlineId: airline, flightNumber: flight)
+            } else {
+                print("❌ VALIDATION FAILED: airline='\(airline)' (valid: \(airlineValid)), flight='\(flight)' (valid: \(flightValid))")
+            }
+        }
+        
+        // STEP 3: Cannot parse
+        print("❌ CANNOT PARSE: '\(input)'")
+        return (airlineId: "", flightNumber: input)
+    }
+    
+    // MARK: - Test Method (Remove after testing)
+    public func testFlightNumberParsing() {
+        let testCases = [
+            "6E 703",   // ✅ Should be: 6E, 703
+            "6E703",    // ✅ Should be: 6E, 703
+            "6E674",    // ✅ Should be: 6E, 674 (NOT 6E6, 74)
+            "9I508",    // ✅ Should be: 9I, 508 (NOT 9I5, 08)
+            "6E171",    // ✅ Should be: 6E, 171 (NOT 6E1, 71)
+            "G9427",    // ✅ Should be: G9, 427 (NOT G, 9427)
+            "3L126",    // ✅ Should be: 3L, 126 (NOT 3L1, 26)
+            "UL 168",   // ✅ Should be: UL, 168
+            "AI 131",   // ✅ Should be: AI, 131
+        ]
+        
+        let separator = String(repeating: "=", count: 50)
+        print("\n" + separator)
+        print("🧪 FLIGHT NUMBER PARSING TEST")
+        print(separator)
+        
+        for testCase in testCases {
+            let (airline, flight) = parseFlightNumber(testCase)
+            let status = airline.count == 2 ? "✅ PASS" : "❌ FAIL"
+            print("\(status) '\(testCase)' → '\(airline)' + '\(flight)'")
+        }
+        
+        print(separator + "\n")
+    }
 }
 
 // MARK: - Network Errors
