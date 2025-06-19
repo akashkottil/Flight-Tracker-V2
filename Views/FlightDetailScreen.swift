@@ -19,7 +19,8 @@ struct FlightDetailScreen: View {
             ScrollView {
                 VStack(spacing: 16) {
                     if isLoading {
-                        loadingView
+                        // FIXED: Use FlightDetailsShimmer instead of basic loading view
+                        FlightDetailsShimmer()
                     } else if let error = error {
                         errorView(error)
                     } else if let flightDetail = flightDetail {
@@ -69,18 +70,6 @@ struct FlightDetailScreen: View {
             Task {
                 await fetchFlightDetails()
             }
-        }
-    }
-    
-    private var loadingView: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("Loading flight details...")
-                .font(.system(size: 16))
-                .foregroundColor(.gray)
-            Spacer()
         }
     }
     
