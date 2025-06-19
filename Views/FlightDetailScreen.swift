@@ -6,6 +6,7 @@ struct FlightDetailScreen: View {
     // Flight parameters
     let flightNumber: String
     let date: String
+    let onFlightViewed: ((TrackedFlightData) -> Void)?
     
     // State for API data
     @State private var flightDetail: FlightDetail?
@@ -14,12 +15,18 @@ struct FlightDetailScreen: View {
     
     private let networkManager = FlightTrackNetworkManager.shared
 
+    // ADDED: Default initializer for backward compatibility
+    init(flightNumber: String, date: String, onFlightViewed: ((TrackedFlightData) -> Void)? = nil) {
+        self.flightNumber = flightNumber
+        self.date = date
+        self.onFlightViewed = onFlightViewed
+    }
+
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 16) {
                     if isLoading {
-                        // FIXED: Use FlightDetailsShimmer instead of basic loading view
                         FlightDetailsShimmer()
                     } else if let error = error {
                         errorView(error)
@@ -43,7 +50,7 @@ struct FlightDetailScreen: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
                         if let flightDetail = flightDetail {
-                            Text("\(flightDetail.departure.airport.city) - \(flightDetail.arrival.airport.city)")
+                            Text("\(flightDetail.departure.airport.city ?? flightDetail.departure.airport.name) - \(flightDetail.arrival.airport.city ?? flightDetail.arrival.airport.name)")  // FIXED: Handle optional city
                                 .font(.system(size: 18))
                                 .fontWeight(.bold)
                         } else {
@@ -71,6 +78,33 @@ struct FlightDetailScreen: View {
                 await fetchFlightDetails()
             }
         }
+        .onDisappear {
+            // ADDED: Add flight to recently viewed when user leaves this screen
+            if let flightDetail = flightDetail, let onFlightViewed = onFlightViewed {
+                addToRecentlyViewed(flightDetail)
+            }
+        }
+    }
+    
+    // ADDED: Add flight to recently viewed when screen is dismissed
+    private func addToRecentlyViewed(_ flight: FlightDetail) {
+        let trackedFlight = TrackedFlightData(
+            id: "\(flightNumber)_\(date)",
+            flightNumber: flight.flightIata,
+            airlineName: flight.airline.name,
+            status: flight.status ?? "Unknown",  // FIXED: Handle optional status
+            departureTime: formatTime(flight.departure.scheduled.local),
+            departureAirport: flight.departure.airport.iataCode,
+            departureDate: formatDateOnly(flight.departure.scheduled.local),
+            arrivalTime: formatTime(flight.arrival.scheduled.local),
+            arrivalAirport: flight.arrival.airport.iataCode,
+            arrivalDate: formatDateOnly(flight.arrival.scheduled.local),
+            duration: calculateDuration(departure: flight.departure.scheduled.local, arrival: flight.arrival.scheduled.local),
+            flightType: "Direct", // You might want to determine this based on actual data
+            date: date
+        )
+        
+        onFlightViewed?(trackedFlight)
     }
     
     private func errorView(_ message: String) -> some View {
@@ -116,7 +150,7 @@ struct FlightDetailScreen: View {
                             .foregroundColor(.gray)
                     }
                     Spacer()
-                    Text(flight.status)
+                    Text(flight.status ?? "Unknown")
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(.rainForest)
@@ -266,7 +300,7 @@ struct FlightDetailScreen: View {
                 // Status Cards
                 VStack(spacing: 12) {
                     flightStatusCard(
-                        title: "\(flight.departure.airport.city), \(flight.departure.airport.country)",
+                        title: "\(flight.departure.airport.city ?? flight.departure.airport.name), \(flight.departure.airport.country ?? "Unknown")",  // FIXED: Handle optional fields
                         gateTime: formatTime(flight.departure.scheduled.local),
                         estimatedGateTime: flight.departure.estimated?.local != nil ? formatTime(flight.departure.estimated?.local) : nil,
                         gateStatus: flight.departure.actual != nil ? "Departed" : "On time",
@@ -279,7 +313,7 @@ struct FlightDetailScreen: View {
                         .padding(.vertical,20)
                     
                     flightStatusCard(
-                        title: "\(flight.arrival.airport.city), \(flight.arrival.airport.country)",
+                        title: "\(flight.arrival.airport.city ?? flight.arrival.airport.name), \(flight.arrival.airport.country ?? "Unknown")",  // FIXED: Handle optional fields
                         gateTime: formatTime(flight.arrival.scheduled.local),
                         estimatedGateTime: flight.arrival.estimated?.local != nil ? formatTime(flight.arrival.estimated?.local) : nil,
                         gateStatus: flight.arrival.actual != nil ? "Arrived" : (flight.arrival.estimated != nil ? getArrivalStatus(scheduled: flight.arrival.scheduled.local ?? "", estimated: flight.arrival.estimated?.local ?? "") : "On time"),
@@ -293,7 +327,7 @@ struct FlightDetailScreen: View {
                 
                 AboutDestination(flight: flight)
                 
-                // Notification & Delete
+                // Notification & Delete section (keeping original design)
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Notification")
@@ -528,7 +562,7 @@ struct FlightDetailScreen: View {
             formatter.dateFormat = format
             if let date = formatter.date(from: timeString) {
                 let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "dd MMM, EEE"
+                dateFormatter.dateFormat = "dd MMM"
                 return dateFormatter.string(from: date)
             }
         }
@@ -672,7 +706,7 @@ struct FlightDetailScreen: View {
     }
 }
 
-// MARK: - Updated supporting views
+// MARK: - Supporting Views (keeping original design)
 
 struct AirlinesInfo: View {
     let airline: FlightDetailAirline
@@ -692,7 +726,7 @@ struct AirlinesInfo: View {
             HStack{
                 VStack {
                     Text("ATC Callsign")
-                    Text(airline.callsign)
+                    Text(airline.callsign ?? "N/A")  // FIXED: Handle optional callsign
                         .fontWeight(.bold)
                 }
                 .padding()
@@ -704,7 +738,7 @@ struct AirlinesInfo: View {
                 
                 VStack {
                     Text("Fleet Size")
-                    Text("\(airline.totalAircrafts)")
+                    Text("\(airline.totalAircrafts ?? 0)")  // FIXED: Handle optional totalAircrafts
                         .fontWeight(.bold)
                 }
                 .padding()
@@ -716,7 +750,7 @@ struct AirlinesInfo: View {
                 
                 VStack {
                     Text("Fleet Age")
-                    Text("\(String(format: "%.1f", airline.averageFleetAge))y")
+                    Text("\(String(format: "%.1f", airline.averageFleetAge ?? 0.0))y")  // FIXED: Handle optional averageFleetAge
                         .fontWeight(.bold)
                 }
                 .padding()
@@ -758,7 +792,7 @@ struct AboutDestination: View {
                     Text("29°C") // You might want to integrate weather API
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("Weather in \(flight.arrival.airport.city)")
+                    Text("Weather in \(flight.arrival.airport.city ?? flight.arrival.airport.name)")  // FIXED: Handle optional city
                         .font(.system(size: 14, weight: .regular))
                         .foregroundColor(.white.opacity(0.7))
                 }

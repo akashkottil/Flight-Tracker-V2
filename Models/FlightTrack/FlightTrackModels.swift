@@ -38,11 +38,12 @@ struct FlightTrackLocation: Codable {
     let lng: Double
 }
 
+// FIXED: Made timezone fields optional based on swagger documentation
 struct FlightTrackTimezone: Codable {
     let timezone: String
-    let countryCode: String
-    let gmt: Double
-    let dst: Double
+    let countryCode: String?        // FIXED: x-nullable: true
+    let gmt: Double?               // FIXED: x-nullable: true
+    let dst: Double?               // FIXED: x-nullable: true
     
     enum CodingKeys: String, CodingKey {
         case timezone
@@ -185,6 +186,7 @@ struct FlightDetailResponse: Codable {
     let result: FlightDetail
 }
 
+// FIXED: Made more fields optional based on swagger documentation
 struct FlightDetail: Codable {
     let greatCircleDistance: GreatCircleDistance
     let departure: FlightLocation
@@ -192,9 +194,9 @@ struct FlightDetail: Codable {
     let lastUpdated: String
     let flightIata: String
     let callSign: String?
-    let status: String
-    let codeshareStatus: String
-    let isCargo: Bool
+    let status: String?             // FIXED: x-nullable: true
+    let codeshareStatus: String?    // FIXED: x-nullable: true
+    let isCargo: Bool?             // FIXED: x-nullable: true
     let aircraft: Aircraft?
     let airline: FlightDetailAirline
     
@@ -235,15 +237,16 @@ struct FlightLocation: Codable {
     }
 }
 
+// FIXED: Made more fields optional based on swagger documentation
 struct FlightDetailAirport: Codable {
     let iataCode: String
-    let icaoCode: String
+    let icaoCode: String?            // x-nullable: true
     let name: String
-    let country: String
+    let country: String?             // FIXED: x-nullable: true
     let countryCode: String
-    let isInternational: Bool
-    let isMajor: Bool
-    let city: String
+    let isInternational: Bool?       // FIXED: x-nullable: true
+    let isMajor: Bool?              // FIXED: x-nullable: true
+    let city: String?               // FIXED: x-nullable: true
     let location: FlightTrackLocation
     let timezone: FlightTrackTimezone
     
@@ -263,24 +266,47 @@ struct FlightTime: Codable {
     let local: String?
 }
 
+// FIXED: Made all aircraft fields properly optional based on swagger documentation
 struct Aircraft: Codable {
-    // Add aircraft properties if needed based on API response
+    let hex: String?               // FIXED: x-nullable: true (despite being marked required)
+    let regNumber: String?
+    let country: String?
+    let built: Int?               // FIXED: Changed to Int? as swagger shows integer
+    let engine: String?
+    let engineCount: Int?         // FIXED: Changed to Int? as swagger shows integer
+    let model: String?
+    let manufacturer: String?
+    let msn: String?
+    let type: String?
+    let category: String?
+    let line: String?
+    let imageUrl: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case hex
+        case regNumber = "reg_number"
+        case country, built, engine
+        case engineCount = "engine_count"
+        case model, manufacturer, msn, type, category, line
+        case imageUrl = "image_url"
+    }
 }
 
+// FIXED: Made more airline fields optional based on swagger documentation
 struct FlightDetailAirline: Codable {
     let name: String
     let iataCode: String
-    let icaoCode: String
-    let isInternational: Bool
-    let website: String
-    let country: String
-    let callsign: String
-    let isPassenger: Bool
-    let isCargo: Bool
-    let totalAircrafts: Int
-    let averageFleetAge: Double
-    let accidentsLast5y: Int
-    let crashesLast5y: Int
+    let icaoCode: String?          // x-nullable: true (already optional)
+    let isInternational: Bool?     // FIXED: x-nullable: true
+    let website: String?           // x-nullable: true (already optional)
+    let country: String?           // FIXED: x-nullable: true
+    let callsign: String?          // x-nullable: true (already optional)
+    let isPassenger: Bool?
+    let isCargo: Bool?
+    let totalAircrafts: Int?
+    let averageFleetAge: Double?
+    let accidentsLast5y: Int?
+    let crashesLast5y: Int?
     
     enum CodingKeys: String, CodingKey {
         case name

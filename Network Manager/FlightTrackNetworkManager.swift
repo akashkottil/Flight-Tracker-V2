@@ -28,7 +28,18 @@ class FlightTrackNetworkManager {
         
         guard 200...299 ~= httpResponse.statusCode else {
             print("Airport search failed with status: \(httpResponse.statusCode)")
-            throw FlightTrackNetworkError.serverError(httpResponse.statusCode)
+            
+            // ENHANCED: Provide user-friendly error messages for airport searches
+            switch httpResponse.statusCode {
+            case 400:
+                throw FlightTrackNetworkError.badRequest("Invalid search query. Please try a different airport name or code.")
+            case 500:
+                throw FlightTrackNetworkError.serverError("Airport search service is experiencing issues. Please try again later.")
+            case 503:
+                throw FlightTrackNetworkError.serviceUnavailable("Airport search is temporarily unavailable. Please try again later.")
+            default:
+                throw FlightTrackNetworkError.serverErrorCode(httpResponse.statusCode)
+            }
         }
         
         do {
@@ -64,7 +75,18 @@ class FlightTrackNetworkManager {
         
         guard 200...299 ~= httpResponse.statusCode else {
             print("Airline search failed with status: \(httpResponse.statusCode)")
-            throw FlightTrackNetworkError.serverError(httpResponse.statusCode)
+            
+            // ENHANCED: Provide user-friendly error messages for airline searches
+            switch httpResponse.statusCode {
+            case 400:
+                throw FlightTrackNetworkError.badRequest("Invalid airline search query. Please try a different airline name or code.")
+            case 500:
+                throw FlightTrackNetworkError.serverError("Airline search service is experiencing issues. Please try again later.")
+            case 503:
+                throw FlightTrackNetworkError.serviceUnavailable("Airline search is temporarily unavailable. Please try again later.")
+            default:
+                throw FlightTrackNetworkError.serverErrorCode(httpResponse.statusCode)
+            }
         }
         
         do {
@@ -118,7 +140,20 @@ class FlightTrackNetworkManager {
         
         guard 200...299 ~= httpResponse.statusCode else {
             print("Schedule search failed with status: \(httpResponse.statusCode)")
-            throw FlightTrackNetworkError.serverError(httpResponse.statusCode)
+            
+            // ENHANCED: Provide user-friendly error messages for schedule searches too
+            switch httpResponse.statusCode {
+            case 400:
+                throw FlightTrackNetworkError.badRequest("Invalid airport or date selection. Please check your input.")
+            case 404:
+                throw FlightTrackNetworkError.flightNotFound("No flights found for the selected airport and date.")
+            case 500:
+                throw FlightTrackNetworkError.serverError("Flight schedule service is experiencing issues. Please try again later.")
+            case 503:
+                throw FlightTrackNetworkError.serviceUnavailable("Schedule data service is temporarily unavailable. Please try again later.")
+            default:
+                throw FlightTrackNetworkError.serverErrorCode(httpResponse.statusCode)
+            }
         }
         
         do {
@@ -178,18 +213,92 @@ class FlightTrackNetworkManager {
                 print("💥 Error response: \(responseString)")
             }
             
-            throw FlightTrackNetworkError.serverError(httpResponse.statusCode)
+            // ENHANCED: Provide user-friendly error messages based on status code
+            switch httpResponse.statusCode {
+            case 400:
+                throw FlightTrackNetworkError.badRequest("Invalid flight number or date. Please check your input.")
+            case 404:
+                throw FlightTrackNetworkError.flightNotFound("Flight \(flightNumber) not found for the selected date.")
+            case 500:
+                throw FlightTrackNetworkError.serverError("Server is experiencing issues. This might be due to external data provider problems. Please try again later.")
+            case 503:
+                throw FlightTrackNetworkError.serviceUnavailable("Flight data service is temporarily unavailable. Please try again later.")
+            default:
+                throw FlightTrackNetworkError.serverErrorCode(httpResponse.statusCode)  // FIXED: Use serverErrorCode for Int
+            }
         }
         
+        // ENHANCED: Better JSON decoding with detailed error handling
         do {
-            let flightDetailResponse = try JSONDecoder().decode(FlightDetailResponse.self, from: data)
-            print("✅ Successfully decoded flight detail")
+            // Create a JSON decoder with better error handling
+            let decoder = JSONDecoder()
+            
+            // Log the raw JSON for debugging (only if decoding fails)
+            let jsonString = String(data: data, encoding: .utf8) ?? "Unable to convert data to string"
+            
+            let flightDetailResponse = try decoder.decode(FlightDetailResponse.self, from: data)
+            print("✅ Successfully decoded flight detail for \(flightNumber)")
             return flightDetailResponse
-        } catch {
-            print("❌ Flight detail decoding error: \(error)")
+            
+        } catch let DecodingError.typeMismatch(type, context) {
+            print("❌ Type mismatch error:")
+            print("   Expected type: \(type)")
+            print("   Coding path: \(context.codingPath)")
+            print("   Description: \(context.debugDescription)")
+            
             if let jsonString = String(data: data, encoding: .utf8) {
-                print("📄 Raw JSON response: \(jsonString)")
+                print("📄 Raw JSON response:")
+                print(jsonString)
             }
+            
+            throw FlightTrackNetworkError.decodingError(DecodingError.typeMismatch(type, context))
+            
+        } catch let DecodingError.keyNotFound(key, context) {
+            print("❌ Key not found error:")
+            print("   Missing key: \(key)")
+            print("   Coding path: \(context.codingPath)")
+            print("   Description: \(context.debugDescription)")
+            
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("📄 Raw JSON response:")
+                print(jsonString)
+            }
+            
+            throw FlightTrackNetworkError.decodingError(DecodingError.keyNotFound(key, context))
+            
+        } catch let DecodingError.valueNotFound(value, context) {
+            print("❌ Value not found error:")
+            print("   Expected value: \(value)")
+            print("   Coding path: \(context.codingPath)")
+            print("   Description: \(context.debugDescription)")
+            
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("📄 Raw JSON response:")
+                print(jsonString)
+            }
+            
+            throw FlightTrackNetworkError.decodingError(DecodingError.valueNotFound(value, context))
+            
+        } catch let DecodingError.dataCorrupted(context) {
+            print("❌ Data corrupted error:")
+            print("   Coding path: \(context.codingPath)")
+            print("   Description: \(context.debugDescription)")
+            
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("📄 Raw JSON response:")
+                print(jsonString)
+            }
+            
+            throw FlightTrackNetworkError.decodingError(DecodingError.dataCorrupted(context))
+            
+        } catch {
+            print("❌ General decoding error: \(error)")
+            
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("📄 Raw JSON response:")
+                print(jsonString)
+            }
+            
             throw FlightTrackNetworkError.decodingError(error)
         }
     }
@@ -242,6 +351,7 @@ class FlightTrackNetworkManager {
             "3L126",    // ✅ Should be: 3L, 126 (NOT 3L1, 26)
             "UL 168",   // ✅ Should be: UL, 168
             "AI 131",   // ✅ Should be: AI, 131
+            "IX493",    // ✅ Should be: IX, 493
         ]
         
         let separator = String(repeating: "=", count: 50)
@@ -263,7 +373,11 @@ class FlightTrackNetworkManager {
 enum FlightTrackNetworkError: LocalizedError {
     case invalidURL
     case invalidResponse
-    case serverError(Int)
+    case serverErrorCode(Int)          // ADDED: Renamed for clarity
+    case serverError(String)           // ADDED: User-friendly server error
+    case badRequest(String)            // ADDED: 400 Bad Request with message
+    case flightNotFound(String)        // ADDED: 404 Flight not found
+    case serviceUnavailable(String)    // ADDED: 503 Service unavailable
     case decodingError(Error)
     
     var errorDescription: String? {
@@ -272,8 +386,16 @@ enum FlightTrackNetworkError: LocalizedError {
             return "Invalid URL"
         case .invalidResponse:
             return "Invalid response"
-        case .serverError(let code):
+        case .serverErrorCode(let code):
             return "Server error with code: \(code)"
+        case .serverError(let message):
+            return message
+        case .badRequest(let message):
+            return message
+        case .flightNotFound(let message):
+            return message
+        case .serviceUnavailable(let message):
+            return message
         case .decodingError(let error):
             return "Decoding error: \(error.localizedDescription)"
         }
