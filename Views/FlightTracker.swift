@@ -16,6 +16,15 @@ struct FlightTrackerScreen: View {
     @State private var trackedDepartureAirport: FlightTrackAirport?
     @State private var trackedArrivalAirport: FlightTrackAirport?
     @State private var trackedSelectedDate: String?
+    @State private var trackedFlightNumber: String = ""
+    @State private var trackedSearchType: TrackedSearchType?
+    
+    // ADDED: Navigation and API response for tracked tab
+    @State private var showingTrackedDetails = false
+    @State private var trackedFlightDetail: FlightDetail?
+    @State private var trackedScheduleResults: [ScheduleResult] = []
+    @State private var trackedAPIError: String?
+    @State private var isLoadingTrackedResults = false
     
     // ADDED: Recently viewed flights for tracked tab
     @State private var recentlyViewedFlights: [TrackedFlightData] = []
@@ -67,7 +76,7 @@ struct FlightTrackerScreen: View {
                 }
                 .onAppear {
                     loadRecentSearchData()
-                    loadRecentlyViewedFlights() // ADDED: Load recently viewed flights
+                    loadRecentlyViewedFlights()
                     if selectedTab == 1 {
                         loadLastSearchedAirport()
                     }
@@ -81,10 +90,362 @@ struct FlightTrackerScreen: View {
                 source: currentSheetSource,
                 searchType: currentSearchType,
                 onLocationSelected: handleLocationSelected,
-                onDateSelected: currentSheetSource == .trackedTab ? handleDateSelected : nil
+                onDateSelected: currentSheetSource == .trackedTab ? handleDateSelected : nil,
+                onFlightNumberEntered: currentSheetSource == .trackedTab ? handleFlightNumberEntered : nil,
+                onSearchCompleted: currentSheetSource == .trackedTab ? handleTrackedSearchCompleted : nil
+            )
+        }
+        .fullScreenCover(isPresented: $showingTrackedDetails) {
+            if let flightDetail = trackedFlightDetail {
+                TrackedDetailsScreen(
+                    flightDetail: flightDetail,
+                    scheduleResults: [],
+                    searchType: .flight
+                )
+            } else if !trackedScheduleResults.isEmpty {
+                TrackedDetailsScreen(
+                    flightDetail: nil,
+                    scheduleResults: trackedScheduleResults,
+                    searchType: .airport
+                )
+            }
+        }
+    }
+    
+    // MARK: - Enhanced Tracked Tab Handlers
+    
+    private func handleFlightNumberEntered(_ flightNumber: String) {
+        trackedFlightNumber = flightNumber
+        print("✈️ Flight number entered: \(flightNumber)")
+    }
+    
+    private func handleTrackedSearchCompleted(searchType: TrackedSearchType, flightNumber: String?, departureAirport: FlightTrackAirport?, arrivalAirport: FlightTrackAirport?, selectedDate: String?) {
+        
+        guard let selectedDate = selectedDate else {
+            print("❌ No date selected")
+            return
+        }
+        
+        let apiDate = convertDateToAPIFormat(selectedDate)
+        
+        Task {
+            await performTrackedSearch(
+                searchType: searchType,
+                flightNumber: flightNumber,
+                departureAirport: departureAirport,
+                arrivalAirport: arrivalAirport,
+                date: apiDate
             )
         }
     }
+    
+    @MainActor
+    private func performTrackedSearch(
+        searchType: TrackedSearchType,
+        flightNumber: String?,
+        departureAirport: FlightTrackAirport?,
+        arrivalAirport: FlightTrackAirport?,
+        date: String
+    ) async {
+        isLoadingTrackedResults = true
+        trackedAPIError = nil
+        
+        do {
+            if searchType == .flight, let flightNumber = flightNumber {
+                // Call flight detail API
+                print("🔍 Calling flight detail API for: \(flightNumber), date: \(date)")
+                let response = try await networkManager.fetchFlightDetail(flightNumber: flightNumber, date: date)
+                trackedFlightDetail = response.result
+                trackedScheduleResults = []
+                
+                // Add to recently viewed
+                addRecentlyViewedFlight(createTrackedFlightData(from: response.result, date: date))
+                
+            } else if searchType == .airport {
+                // Call schedules API
+                let departureId = departureAirport?.iataCode
+                let arrivalId = arrivalAirport?.iataCode
+                
+                print("🔍 Calling schedules API - dep: \(departureId ?? "nil"), arr: \(arrivalId ?? "nil"), date: \(date)")
+                let response = try await networkManager.searchSchedules(
+                    departureId: departureId,
+                    arrivalId: arrivalId,
+                    date: date
+                )
+                trackedScheduleResults = response.results
+                trackedFlightDetail = nil
+            }
+            
+            // Navigate to TrackedDetailsScreen
+            showingTrackedDetails = true
+            
+        } catch {
+            trackedAPIError = error.localizedDescription
+            print("❌ Tracked search error: \(error)")
+        }
+        
+        isLoadingTrackedResults = false
+    }
+    
+    private func createTrackedFlightData(from flightDetail: FlightDetail, date: String) -> TrackedFlightData {
+        return TrackedFlightData(
+            id: "\(flightDetail.flightIata)_\(date)",
+            flightNumber: flightDetail.flightIata,
+            airlineName: flightDetail.airline.name,
+            status: flightDetail.status ?? "Unknown",
+            departureTime: formatTime(flightDetail.departure.scheduled.local),
+            departureAirport: flightDetail.departure.airport.iataCode,
+            departureDate: formatDateOnly(flightDetail.departure.scheduled.local),
+            arrivalTime: formatTime(flightDetail.arrival.scheduled.local),
+            arrivalAirport: flightDetail.arrival.airport.iataCode,
+            arrivalDate: formatDateOnly(flightDetail.arrival.scheduled.local),
+            duration: calculateDuration(departure: flightDetail.departure.scheduled.local, arrival: flightDetail.arrival.scheduled.local),
+            flightType: "Direct",
+            date: date
+        )
+    }
+    
+    // MARK: - Helper Methods for Time Formatting
+    
+    private func formatTime(_ timeString: String?) -> String {
+        guard let timeString = timeString else { return "--:--" }
+        
+        let formatter = DateFormatter()
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        ]
+        
+        for format in formats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: timeString) {
+                let timeFormatter = DateFormatter()
+                timeFormatter.dateFormat = "HH:mm"
+                return timeFormatter.string(from: date)
+            }
+        }
+        return timeString
+    }
+    
+    private func formatDateOnly(_ timeString: String?) -> String {
+        guard let timeString = timeString else { return "--" }
+        
+        let formatter = DateFormatter()
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        ]
+        
+        for format in formats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: timeString) {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "dd MMM"
+                return dateFormatter.string(from: date)
+            }
+        }
+        return timeString
+    }
+    
+    private func calculateDuration(departure: String?, arrival: String?) -> String {
+        guard let depString = departure, let arrString = arrival else { return "--h --min" }
+        
+        let formatter = DateFormatter()
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        ]
+        
+        var depDate: Date?
+        var arrDate: Date?
+        
+        for format in formats {
+            formatter.dateFormat = format
+            if depDate == nil {
+                depDate = formatter.date(from: depString)
+            }
+            if arrDate == nil {
+                arrDate = formatter.date(from: arrString)
+            }
+            if depDate != nil && arrDate != nil {
+                break
+            }
+        }
+        
+        guard let departureDate = depDate, let arrivalDate = arrDate else { return "--h --min" }
+        
+        let duration = arrivalDate.timeIntervalSince(departureDate)
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration.truncatingRemainder(dividingBy: 3600)) / 60
+        
+        return "\(hours)h \(minutes)min"
+    }
+    
+    // MARK: - Helper Methods for Handler Functions
+    
+    private func handleLocationSelected(_ airport: FlightTrackAirport) {
+        Task {
+            await handleLocationSelection(airport)
+        }
+    }
+    
+    private func handleDateSelected(_ date: String) {
+        trackedSelectedDate = date
+        Task {
+            await checkTrackedSearchReady()
+        }
+    }
+    
+    @MainActor
+    private func handleLocationSelection(_ airport: FlightTrackAirport) async {
+        switch currentSheetSource {
+        case .trackedTab:
+            // For tracked tab, we need to determine if this is departure or arrival
+            if trackedDepartureAirport == nil {
+                trackedDepartureAirport = airport
+            } else {
+                trackedArrivalAirport = airport
+                await checkTrackedSearchReady()
+            }
+            
+        case .scheduledDeparture:
+            // ADDED: Clear cache if location is different
+            if selectedDepartureAirport?.iataCode != airport.iataCode {
+                clearCache()
+            }
+            selectedDepartureAirport = airport
+            selectedArrivalAirport = nil
+            // Save as last searched airport
+            saveLastSearchedAirport(airport, searchType: .departure)
+            // Make API call for scheduled departures
+            await fetchScheduleResults(departureId: airport.iataCode, arrivalId: nil)
+            
+        case .scheduledArrival:
+            // ADDED: Clear cache if location is different
+            if selectedArrivalAirport?.iataCode != airport.iataCode {
+                clearCache()
+            }
+            selectedArrivalAirport = airport
+            selectedDepartureAirport = nil
+            // Save as last searched airport
+            saveLastSearchedAirport(airport, searchType: .arrival)
+            // Make API call for scheduled arrivals
+            await fetchScheduleResults(departureId: nil, arrivalId: airport.iataCode)
+        }
+    }
+    
+    @MainActor
+    private func checkTrackedSearchReady() async {
+        guard let departure = trackedDepartureAirport,
+              let arrival = trackedArrivalAirport,
+              let dateString = trackedSelectedDate else {
+            return
+        }
+        
+        let formattedDate = convertDateToAPIFormat(dateString)
+        await fetchScheduleResults(
+            departureId: departure.iataCode,
+            arrivalId: arrival.iataCode,
+            date: formattedDate
+        )
+    }
+    
+    private func convertDateToAPIFormat(_ dateSelection: String) -> String {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        switch dateSelection {
+        case "yesterday":
+            let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+            return formatDateForAPI(yesterday)
+        case "today":
+            return formatDateForAPI(today)
+        case "tomorrow":
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+            return formatDateForAPI(tomorrow)
+        case "dayafter":
+            let dayAfter = calendar.date(byAdding: .day, value: 2, to: today)!
+            return formatDateForAPI(dayAfter)
+        default:
+            return formatDateForAPI(today)
+        }
+    }
+    
+    private func formatDateForAPI(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.string(from: date)
+    }
+    
+    // Helper methods for navigation
+    private func getCurrentDateForAPI() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.string(from: Date())
+    }
+    
+    private func getSelectedDateForAPI() -> String {
+        guard let selectedDate = trackedSelectedDate else {
+            return getCurrentDateForAPI()
+        }
+        return convertDateToAPIFormat(selectedDate)
+    }
+    
+    // MARK: - Recently Viewed Flights Management
+    
+    private func addRecentlyViewedFlight(_ flight: TrackedFlightData) {
+        // Remove any existing instance of the same flight (same flight number + date)
+        recentlyViewedFlights.removeAll { existingFlight in
+            existingFlight.flightNumber == flight.flightNumber && existingFlight.date == flight.date
+        }
+        
+        // Add the flight to the beginning of the list (most recent)
+        recentlyViewedFlights.insert(flight, at: 0)
+        
+        // Keep only the last 5 unique viewed flights
+        if recentlyViewedFlights.count > 5 {
+            recentlyViewedFlights = Array(recentlyViewedFlights.prefix(5))
+        }
+        
+        saveRecentlyViewedFlights()
+        
+        print("📱 Recently viewed flights updated:")
+        for (index, flight) in recentlyViewedFlights.enumerated() {
+            print("  \(index + 1). \(flight.flightNumber) (\(flight.airlineName)) - \(flight.date)")
+        }
+    }
+    
+    private func saveRecentlyViewedFlights() {
+        if let data = try? JSONEncoder().encode(recentlyViewedFlights) {
+            UserDefaults.standard.set(data, forKey: "RecentlyViewedFlights")
+        }
+    }
+    
+    private func loadRecentlyViewedFlights() {
+        guard let data = UserDefaults.standard.data(forKey: "RecentlyViewedFlights"),
+              let flights = try? JSONDecoder().decode([TrackedFlightData].self, from: data) else {
+            return
+        }
+        recentlyViewedFlights = flights
+    }
+    
+    // MARK: - Cache Management
+    
+    private func clearCache() {
+        cachedDepartureResults = []
+        cachedArrivalResults = []
+        currentCachedAirport = nil
+        lastCachedDate = nil
+        print("🗑️ Cache cleared")
+    }
+    
+    // MARK: - UI Components
     
     private var headerView: some View {
         VStack(spacing: 20) {
@@ -105,7 +466,7 @@ struct FlightTrackerScreen: View {
                 Button(action: {
                     selectedTab = 0
                     currentSheetSource = .trackedTab
-                    clearCurrentSessionData() // Only clear current session, keep persistent data
+                    clearCurrentSessionData()
                 }) {
                     Text("Tracked")
                         .font(selectedTab == 0 ? Font.system(size: 13, weight: .bold) : Font.system(size: 13, weight: .regular))
@@ -122,8 +483,7 @@ struct FlightTrackerScreen: View {
                 Button(action: {
                     selectedTab = 1
                     currentSheetSource = .scheduledDeparture
-                    clearCurrentSessionData() // Only clear current session, keep persistent data
-                    // Load last searched airport when switching to scheduled tab
+                    clearCurrentSessionData()
                     loadLastSearchedAirport()
                 }) {
                     Text("Scheduled")
@@ -147,60 +507,19 @@ struct FlightTrackerScreen: View {
         .padding(.top, 20)
     }
     
-    private func clearScheduleResults() {
-        scheduleResults = []
-        scheduleError = nil
-        isLoadingSchedules = false
-    }
-    
-    // MODIFIED: Only clear current session data, keep persistent last searched data
-    private func clearCurrentSessionData() {
-        clearScheduleResults()
-        // Clear tracked tab data
-        trackedDepartureAirport = nil
-        trackedArrivalAirport = nil
-        trackedSelectedDate = nil
-        // Clear current session selected airports (but keep lastSearchedAirportData)
-        selectedDepartureAirport = nil
-        selectedArrivalAirport = nil
-        // ADDED: Clear cached results when switching tabs
-        cachedDepartureResults = []
-        cachedArrivalResults = []
-        currentCachedAirport = nil
-        lastCachedDate = nil
-        // Clear displaying recent results but keep stored recent searches
-        displayingRecentResults = []
-        
-        // Reset currentSheetSource based on current selected tab
-        if selectedTab == 0 {
-            currentSheetSource = .trackedTab
-        } else {
-            currentSheetSource = selectedFlightType == 0 ? .scheduledDeparture : .scheduledArrival
-        }
-        
-        // Load recent search data when switching tabs
-        if selectedTab == 1 {
-            loadRecentSearchData()
-        }
-    }
-    
     private var trackedTabContent: some View {
         VStack(spacing: 20) {
-            // Search Field for Tracked Tab
             trackedSearchFieldView
             
-            // ADDED: Show recently viewed flights if available
             if !recentlyViewedFlights.isEmpty {
                 recentlyViewedFlightsListView
             } else if isLoadingSchedules {
-                // Show shimmer loading
                 VStack(spacing: 0) {
                     flightListHeader
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(0..<6, id: \.self) { index in
                                 FlightRowShimmer()
-                                
                                 if index < 5 {
                                     Divider()
                                 }
@@ -212,7 +531,6 @@ struct FlightTrackerScreen: View {
             } else if let error = scheduleError {
                 errorView(error)
             } else if !scheduleResults.isEmpty {
-                // Show API results
                 VStack(spacing: 0) {
                     flightListHeader
                     ScrollView {
@@ -238,7 +556,6 @@ struct FlightTrackerScreen: View {
                     .padding(.horizontal, 20)
                 }
             } else {
-                // Empty State
                 Spacer()
                 
                 VStack(spacing: 16) {
@@ -263,7 +580,6 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    // ADDED: Recently viewed flights list view
     private var recentlyViewedFlightsListView: some View {
         VStack(spacing: 0) {
             // Header
@@ -335,128 +651,6 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    private var loadingSchedulesView: some View {
-        VStack(spacing: 0) {
-            // Flight List Header
-            flightListHeader
-            
-            // Shimmer Loading
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(0..<6, id: \.self) { index in
-                        FlightRowShimmer()
-                        
-                        if index < 5 {
-                            Divider()
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-    
-    private func errorView(_ message: String) -> some View {
-        VStack(spacing: 20) {
-            Spacer()
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 50))
-                .foregroundColor(.orange)
-            Text("Error loading flights")
-                .font(.system(size: 18, weight: .semibold))
-            Text(message)
-                .font(.system(size: 14))
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            Spacer()
-        }
-    }
-    
-    private var scheduleFlightListView: some View {
-        VStack(spacing: 0) {
-            // Flight List Header
-            flightListHeader
-            
-            // Flight List from API
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(scheduleResults.indices, id: \.self) { index in
-                        NavigationLink(destination: FlightDetailScreen(
-                            flightNumber: scheduleResults[index].flightNumber,
-                            date: getCurrentDateForAPI(),
-                            onFlightViewed: { flight in
-                                addRecentlyViewedFlight(flight)
-                            }
-                        )) {
-                            flightRowContent(scheduleResults[index])
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        if index < scheduleResults.count - 1 {
-                            Divider()
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-    
-    private var recentSearchFlightListView: some View {
-        VStack(spacing: 0) {
-            flightListHeader
-            
-            // Flight List from Recent Search
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(displayingRecentResults.indices, id: \.self) { index in
-                        NavigationLink(destination: FlightDetailScreen(
-                            flightNumber: displayingRecentResults[index].flightNumber,
-                            date: getCurrentDateForAPI(),
-                            onFlightViewed: { flight in
-                                addRecentlyViewedFlight(flight)
-                            }
-                        )) {
-                            flightRowContent(displayingRecentResults[index])
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        if index < displayingRecentResults.count - 1 {
-                            Divider()
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-    
-    private var scheduledEmptyStateView: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            
-            VStack(spacing: 16) {
-                ZStack {
-                    Image("NoFlights")
-                        .frame(width: 92, height: 92)
-                }
-                
-                Text("Search any flights")
-                    .font(.system(size: 22))
-                    .fontWeight(.bold)
-                    .foregroundColor(.black)
-                
-                Text("Find departures and arrivals for any airport")
-                    .font(.system(size: 16))
-                    .fontWeight(.semibold)
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-        }
-    }
-    
     private var trackedSearchFieldView: some View {
         HStack {
             TextField("Try flight number \"6E 6083\"", text: $searchText)
@@ -478,7 +672,6 @@ struct FlightTrackerScreen: View {
         .padding(.top, 20)
     }
     
-    // MODIFIED: Show last searched location but keep trackLocationSheet empty
     private var scheduledSearchFieldView: some View {
         HStack {
             HStack {
@@ -612,6 +805,128 @@ struct FlightTrackerScreen: View {
         .padding(.top, 20)
     }
     
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 50))
+                .foregroundColor(.orange)
+            Text("Error loading flights")
+                .font(.system(size: 18, weight: .semibold))
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Spacer()
+        }
+    }
+    
+    private var loadingSchedulesView: some View {
+        VStack(spacing: 0) {
+            // Flight List Header
+            flightListHeader
+            
+            // Shimmer Loading
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(0..<6, id: \.self) { index in
+                        FlightRowShimmer()
+                        
+                        if index < 5 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    private var scheduleFlightListView: some View {
+        VStack(spacing: 0) {
+            // Flight List Header
+            flightListHeader
+            
+            // Flight List from API
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(scheduleResults.indices, id: \.self) { index in
+                        NavigationLink(destination: FlightDetailScreen(
+                            flightNumber: scheduleResults[index].flightNumber,
+                            date: getCurrentDateForAPI(),
+                            onFlightViewed: { flight in
+                                addRecentlyViewedFlight(flight)
+                            }
+                        )) {
+                            flightRowContent(scheduleResults[index])
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        if index < scheduleResults.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    private var recentSearchFlightListView: some View {
+        VStack(spacing: 0) {
+            flightListHeader
+            
+            // Flight List from Recent Search
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(displayingRecentResults.indices, id: \.self) { index in
+                        NavigationLink(destination: FlightDetailScreen(
+                            flightNumber: displayingRecentResults[index].flightNumber,
+                            date: getCurrentDateForAPI(),
+                            onFlightViewed: { flight in
+                                addRecentlyViewedFlight(flight)
+                            }
+                        )) {
+                            flightRowContent(displayingRecentResults[index])
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        if index < displayingRecentResults.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    private var scheduledEmptyStateView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            
+            VStack(spacing: 16) {
+                ZStack {
+                    Image("NoFlights")
+                        .frame(width: 92, height: 92)
+                }
+                
+                Text("Search any flights")
+                    .font(.system(size: 22))
+                    .fontWeight(.bold)
+                    .foregroundColor(.black)
+                
+                Text("Find departures and arrivals for any airport")
+                    .font(.system(size: 16))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+    }
+    
     private var flightListHeader: some View {
         VStack(spacing: 0) {
             HStack {
@@ -722,9 +1037,120 @@ struct FlightTrackerScreen: View {
         .padding(.vertical, 12)
     }
     
-    // MARK: - Helper Methods
+    private func openTrackLocationSheet(source: SheetSource) {
+        // Force state update before showing sheet
+        DispatchQueue.main.async {
+            self.currentSheetSource = source
+            self.currentSearchType = self.selectedFlightType == 0 ? .departure : .arrival
+            
+            // Small delay to ensure state is properly updated
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                self.showingTrackLocationSheet = true
+            }
+        }
+    }
     
-    // ADDED: Smart flight type switching with caching
+    // MARK: - Data Management Methods
+    
+    private func clearScheduleResults() {
+        scheduleResults = []
+        scheduleError = nil
+        isLoadingSchedules = false
+    }
+    
+    private func clearCurrentSessionData() {
+        clearScheduleResults()
+        trackedDepartureAirport = nil
+        trackedArrivalAirport = nil
+        trackedSelectedDate = nil
+        trackedFlightNumber = ""
+        trackedSearchType = nil
+        selectedDepartureAirport = nil
+        selectedArrivalAirport = nil
+        cachedDepartureResults = []
+        cachedArrivalResults = []
+        currentCachedAirport = nil
+        lastCachedDate = nil
+        displayingRecentResults = []
+        
+        // Clear tracked tab specific data
+        trackedFlightDetail = nil
+        trackedScheduleResults = []
+        trackedAPIError = nil
+        
+        if selectedTab == 0 {
+            currentSheetSource = .trackedTab
+        } else {
+            currentSheetSource = selectedFlightType == 0 ? .scheduledDeparture : .scheduledArrival
+        }
+        
+        if selectedTab == 1 {
+            loadRecentSearchData()
+        }
+    }
+    
+    // MARK: - API Methods
+    
+    @MainActor
+    private func fetchScheduleResults(departureId: String?, arrivalId: String?, date: String? = nil) async {
+        isLoadingSchedules = true
+        scheduleError = nil
+        displayingRecentResults = []
+        
+        do {
+            let response = try await networkManager.searchSchedules(
+                departureId: departureId,
+                arrivalId: arrivalId,
+                date: date
+            )
+            
+            scheduleResults = response.results.map { scheduleResult in
+                convertScheduleToFlightInfo(scheduleResult, departureAirport: response.departureAirport, arrivalAirport: response.arrivalAirport)
+            }
+            
+            // ADDED: Cache the results based on search type
+            let currentDate = getCurrentDateForAPI()
+            if let airportId = departureId ?? arrivalId {
+                // Update cache info
+                if currentCachedAirport?.iataCode != airportId {
+                    currentCachedAirport = FlightTrackAirport(
+                        iataCode: airportId,
+                        icaoCode: nil,
+                        name: "",
+                        country: "",
+                        countryCode: "",
+                        isInternational: nil,
+                        isMajor: nil,
+                        city: "",
+                        location: FlightTrackLocation(lat: 0.0, lng: 0.0),
+                        timezone: FlightTrackTimezone(timezone: "", countryCode: "", gmt: 0.0, dst: 0.0)
+                    )
+                }
+                lastCachedDate = currentDate
+                
+                // Cache results based on type
+                if departureId != nil {
+                    cachedDepartureResults = scheduleResults
+                    print("💾 Cached departure results for \(airportId) (\(scheduleResults.count) flights)")
+                } else {
+                    cachedArrivalResults = scheduleResults
+                    print("💾 Cached arrival results for \(airportId) (\(scheduleResults.count) flights)")
+                }
+            }
+            
+            if !scheduleResults.isEmpty {
+                saveCurrentSearchLocally()
+            }
+            
+        } catch {
+            scheduleError = error.localizedDescription
+            scheduleResults = []
+            print("Schedule fetch error: \(error)")
+        }
+        
+        isLoadingSchedules = false
+    }
+    
     private func switchToFlightType(_ targetType: FlightSearchType, from previousType: Int) {
         let currentDate = getCurrentDateForAPI()
         
@@ -819,195 +1245,7 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    private func openTrackLocationSheet(source: SheetSource) {
-        // Force state update before showing sheet
-        DispatchQueue.main.async {
-            self.currentSheetSource = source
-            self.currentSearchType = self.selectedFlightType == 0 ? .departure : .arrival
-            
-            // Small delay to ensure state is properly updated
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                self.showingTrackLocationSheet = true
-            }
-        }
-    }
-    
-    private func handleLocationSelected(_ airport: FlightTrackAirport) {
-        Task {
-            await handleLocationSelection(airport)
-        }
-    }
-    
-    private func handleDateSelected(_ date: String) {
-        trackedSelectedDate = date
-        Task {
-            await checkTrackedSearchReady()
-        }
-    }
-    
-    @MainActor
-    private func handleLocationSelection(_ airport: FlightTrackAirport) async {
-        switch currentSheetSource {
-        case .trackedTab:
-            // For tracked tab, we need to determine if this is departure or arrival
-            if trackedDepartureAirport == nil {
-                trackedDepartureAirport = airport
-            } else {
-                trackedArrivalAirport = airport
-                await checkTrackedSearchReady()
-            }
-            
-        case .scheduledDeparture:
-            // ADDED: Clear cache if location is different
-            if selectedDepartureAirport?.iataCode != airport.iataCode {
-                clearCache()
-            }
-            selectedDepartureAirport = airport
-            selectedArrivalAirport = nil
-            // Save as last searched airport
-            saveLastSearchedAirport(airport, searchType: .departure)
-            // Make API call for scheduled departures
-            await fetchScheduleResults(departureId: airport.iataCode, arrivalId: nil)
-            
-        case .scheduledArrival:
-            // ADDED: Clear cache if location is different
-            if selectedArrivalAirport?.iataCode != airport.iataCode {
-                clearCache()
-            }
-            selectedArrivalAirport = airport
-            selectedDepartureAirport = nil
-            // Save as last searched airport
-            saveLastSearchedAirport(airport, searchType: .arrival)
-            // Make API call for scheduled arrivals
-            await fetchScheduleResults(departureId: nil, arrivalId: airport.iataCode)
-        }
-    }
-    
-    @MainActor
-    private func checkTrackedSearchReady() async {
-        guard let departure = trackedDepartureAirport,
-              let arrival = trackedArrivalAirport,
-              let dateString = trackedSelectedDate else {
-            return
-        }
-        
-        let formattedDate = convertDateToAPIFormat(dateString)
-        await fetchScheduleResults(
-            departureId: departure.iataCode,
-            arrivalId: arrival.iataCode,
-            date: formattedDate
-        )
-    }
-    
-    private func convertDateToAPIFormat(_ dateSelection: String) -> String {
-        let calendar = Calendar.current
-        let today = Date()
-        
-        switch dateSelection {
-        case "yesterday":
-            let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
-            return formatDateForAPI(yesterday)
-        case "today":
-            return formatDateForAPI(today)
-        case "tomorrow":
-            let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
-            return formatDateForAPI(tomorrow)
-        case "dayafter":
-            let dayAfter = calendar.date(byAdding: .day, value: 2, to: today)!
-            return formatDateForAPI(dayAfter)
-        default:
-            return formatDateForAPI(today)
-        }
-    }
-    
-    private func formatDateForAPI(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd"
-        return formatter.string(from: date)
-    }
-    
-    // Helper methods for navigation
-    private func getCurrentDateForAPI() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd"
-        return formatter.string(from: Date())
-    }
-    
-    private func getSelectedDateForAPI() -> String {
-        guard let selectedDate = trackedSelectedDate else {
-            return getCurrentDateForAPI()
-        }
-        return convertDateToAPIFormat(selectedDate)
-    }
-    
-    @MainActor
-    private func fetchScheduleResults(departureId: String?, arrivalId: String?, date: String? = nil) async {
-        isLoadingSchedules = true
-        scheduleError = nil
-        displayingRecentResults = []
-        
-        do {
-            let response = try await networkManager.searchSchedules(
-                departureId: departureId,
-                arrivalId: arrivalId,
-                date: date
-            )
-            
-            scheduleResults = response.results.map { scheduleResult in
-                convertScheduleToFlightInfo(scheduleResult, departureAirport: response.departureAirport, arrivalAirport: response.arrivalAirport)
-            }
-            
-            // ADDED: Cache the results based on search type
-            let currentDate = getCurrentDateForAPI()
-            if let airportId = departureId ?? arrivalId {
-                // Update cache info
-                if currentCachedAirport?.iataCode != airportId {
-                    currentCachedAirport = FlightTrackAirport(
-                        iataCode: airportId,
-                        icaoCode: nil,
-                        name: "",
-                        country: "",
-                        countryCode: "",
-                        isInternational: nil,
-                        isMajor: nil,
-                        city: "",
-                        location: FlightTrackLocation(lat: 0.0, lng: 0.0),
-                        timezone: FlightTrackTimezone(timezone: "", countryCode: "", gmt: 0.0, dst: 0.0)
-                    )
-                }
-                lastCachedDate = currentDate
-                
-                // Cache results based on type
-                if departureId != nil {
-                    cachedDepartureResults = scheduleResults
-                    print("💾 Cached departure results for \(airportId) (\(scheduleResults.count) flights)")
-                } else {
-                    cachedArrivalResults = scheduleResults
-                    print("💾 Cached arrival results for \(airportId) (\(scheduleResults.count) flights)")
-                }
-            }
-            
-            if !scheduleResults.isEmpty {
-                saveCurrentSearchLocally()
-            }
-            
-        } catch {
-            scheduleError = error.localizedDescription
-            scheduleResults = []
-            print("Schedule fetch error: \(error)")
-        }
-        
-        isLoadingSchedules = false
-    }
-    
-    // ADDED: Clear cache helper method
-    private func clearCache() {
-        cachedDepartureResults = []
-        cachedArrivalResults = []
-        currentCachedAirport = nil
-        lastCachedDate = nil
-        print("🗑️ Cache cleared")
-    }
+    // MARK: - Data Persistence Methods
     
     private func saveCurrentSearchLocally() {
         displayingRecentResults = scheduleResults
@@ -1070,7 +1308,6 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    // MODIFIED: Save last searched airport with better search type handling
     private func saveLastSearchedAirport(_ airport: FlightTrackAirport, searchType: FlightSearchType) {
         lastSearchType = searchType
         
@@ -1089,7 +1326,6 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    // MODIFIED: Load last searched airport and automatically fetch results
     private func loadLastSearchedAirport() {
         guard let data = UserDefaults.standard.data(forKey: "LastSearchedAirport"),
               let airportData = try? JSONDecoder().decode(LastSearchedAirportData.self, from: data) else {
@@ -1129,46 +1365,11 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    // ADDED: Recently viewed flights management
-    private func addRecentlyViewedFlight(_ flight: TrackedFlightData) {
-        // Remove any existing instance of the same flight (same flight number + date)
-        recentlyViewedFlights.removeAll { existingFlight in
-            existingFlight.flightNumber == flight.flightNumber && existingFlight.date == flight.date
-        }
-        
-        // Add the flight to the beginning of the list (most recent)
-        recentlyViewedFlights.insert(flight, at: 0)
-        
-        // Keep only the last 5 unique viewed flights
-        if recentlyViewedFlights.count > 5 {
-            recentlyViewedFlights = Array(recentlyViewedFlights.prefix(5))
-        }
-        
-        saveRecentlyViewedFlights()
-        
-        print("📱 Recently viewed flights updated:")
-        for (index, flight) in recentlyViewedFlights.enumerated() {
-            print("  \(index + 1). \(flight.flightNumber) (\(flight.airlineName)) - \(flight.date)")
-        }
-    }
-    
-    private func saveRecentlyViewedFlights() {
-        if let data = try? JSONEncoder().encode(recentlyViewedFlights) {
-            UserDefaults.standard.set(data, forKey: "RecentlyViewedFlights")
-        }
-    }
-    
-    private func loadRecentlyViewedFlights() {
-        guard let data = UserDefaults.standard.data(forKey: "RecentlyViewedFlights"),
-              let flights = try? JSONDecoder().decode([TrackedFlightData].self, from: data) else {
-            return
-        }
-        recentlyViewedFlights = flights
-    }
+    // MARK: - Data Conversion Methods
     
     private func convertScheduleToFlightInfo(_ schedule: ScheduleResult, departureAirport: FlightTrackAirport?, arrivalAirport: FlightTrackAirport?) -> FlightInfo {
-        let departureTime = formatTime(schedule.departureTime)
-        let arrivalTime = formatTime(schedule.arrivalTime)
+        let departureTime = formatTimeString(schedule.departureTime)
+        let arrivalTime = formatTimeString(schedule.arrivalTime)
         
         let destination: String
         let destinationName: String
@@ -1211,7 +1412,7 @@ struct FlightTrackerScreen: View {
         )
     }
     
-    private func formatTime(_ timeString: String) -> String {
+    private func formatTimeString(_ timeString: String) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         
@@ -1225,7 +1426,7 @@ struct FlightTrackerScreen: View {
     }
 }
 
-// MARK: - Supporting Models
+// MARK: - Supporting Models (Keep existing)
 struct LastSearchedAirportData: Codable {
     let iataCode: String
     let name: String

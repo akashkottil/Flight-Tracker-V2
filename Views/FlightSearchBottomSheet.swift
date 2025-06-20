@@ -1,4 +1,5 @@
-// Views/Flight Tracker/FlightSearchBottomSheet.swift
+// Enhanced FlightSearchBottomSheet.swift - Add tracked tab completion logic
+
 import SwiftUI
 
 struct trackLocationSheet: View {
@@ -8,8 +9,19 @@ struct trackLocationSheet: View {
     let onLocationSelected: (FlightTrackAirport) -> Void
     let onDateSelected: ((String) -> Void)?
     
+    // ADDED: New completion handlers for tracked tab
+    let onFlightNumberEntered: ((String) -> Void)?
+    let onSearchCompleted: ((TrackedSearchType, String?, FlightTrackAirport?, FlightTrackAirport?, String?) -> Void)?
+    
     @StateObject private var viewModel = AirportSearchViewModel()
     @State private var selectedAirport: FlightTrackAirport?
+    
+    // ADDED: Track completion state for tracked tab
+    @State private var trackedDepartureAirport: FlightTrackAirport?
+    @State private var trackedArrivalAirport: FlightTrackAirport?
+    @State private var trackedFlightNumber: String = ""
+    @State private var trackedSelectedDate: String?
+    @State private var trackedSearchType: TrackedSearchType?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -50,12 +62,11 @@ struct trackLocationSheet: View {
         }
         .background(Color.white)
         .onAppear {
-            // Set search type based on source
             viewModel.shouldPerformMixedSearch = (source == .trackedTab)
         }
     }
     
-    // MARK: - Tracked Tab Content
+    // MARK: - Enhanced Tracked Tab Content
     
     @ViewBuilder
     private func trackedTabContent() -> some View {
@@ -69,7 +80,6 @@ struct trackLocationSheet: View {
             } else if !viewModel.searchText.isEmpty && (!viewModel.airports.isEmpty || !viewModel.airlines.isEmpty) {
                 searchResultsView()
             } else if viewModel.searchText.isEmpty {
-                // Show default content when no search
                 defaultTrackedContent()
             }
             
@@ -77,6 +87,44 @@ struct trackLocationSheet: View {
             if let searchType = viewModel.selectedSearchType {
                 additionalFieldsView(for: searchType)
             }
+            
+            // ADDED: Auto-check completion when all fields are filled
+            if source == .trackedTab {
+                let _ = checkTrackedCompletion()
+            }
+        }
+    }
+    
+    // ADDED: Check if tracked search is complete and trigger API call
+    private func checkTrackedCompletion() {
+        // Check if we have all required data
+        guard let searchType = trackedSearchType,
+              let selectedDate = trackedSelectedDate else {
+            return
+        }
+        
+        var isComplete = false
+        
+        if searchType == .flight {
+            // For flight search: need flight number
+            isComplete = !trackedFlightNumber.isEmpty
+        } else if searchType == .airport {
+            // For airport search: need at least departure airport
+            isComplete = trackedDepartureAirport != nil
+        }
+        
+        if isComplete {
+            // Trigger the completion handler
+            onSearchCompleted?(
+                searchType,
+                searchType == .flight ? trackedFlightNumber : nil,
+                trackedDepartureAirport,
+                trackedArrivalAirport,
+                selectedDate
+            )
+            
+            // Close the sheet
+            isPresented = false
         }
     }
     
@@ -89,6 +137,10 @@ struct trackLocationSheet: View {
                 if !viewModel.searchText.isEmpty {
                     Button(action: {
                         viewModel.clearSearch()
+                        // ADDED: Clear tracked data when search is cleared
+                        if source == .trackedTab {
+                            resetTrackedData()
+                        }
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.gray)
@@ -123,7 +175,12 @@ struct trackLocationSheet: View {
                     ForEach(validAirlines.prefix(3)) { airline in
                         airlineRowView(airline)
                             .onTapGesture {
-                                viewModel.selectAirline(airline)
+                                // ADDED: Enhanced airline selection for tracked tab
+                                if source == .trackedTab {
+                                    selectAirlineForTracked(airline)
+                                } else {
+                                    viewModel.selectAirline(airline)
+                                }
                             }
                     }
                 }
@@ -139,7 +196,12 @@ struct trackLocationSheet: View {
                     ForEach(viewModel.airports.prefix(3)) { airport in
                         airportRowView(airport)
                             .onTapGesture {
-                                viewModel.selectAirport(airport)
+                                // ADDED: Enhanced airport selection for tracked tab
+                                if source == .trackedTab {
+                                    selectAirportForTracked(airport)
+                                } else {
+                                    viewModel.selectAirport(airport)
+                                }
                             }
                     }
                 }
@@ -147,9 +209,192 @@ struct trackLocationSheet: View {
         }
     }
     
+    // ADDED: Enhanced selection handlers for tracked tab
+    private func selectAirlineForTracked(_ airline: FlightTrackAirline) {
+        trackedSearchType = .flight
+        viewModel.selectedSearchType = .flight
+        let airlineCode = airline.iataCode ?? airline.icaoCode ?? "??"
+        viewModel.searchText = "\(airlineCode) - \(airline.name)"
+        print("✈️ Selected airline for tracked: \(airlineCode)")
+    }
+    
+    private func selectAirportForTracked(_ airport: FlightTrackAirport) {
+        trackedSearchType = .airport
+        viewModel.selectedSearchType = .airport
+        
+        // Always set as departure airport first
+        if trackedDepartureAirport == nil {
+            trackedDepartureAirport = airport
+            viewModel.searchText = "\(airport.iataCode) - \(airport.city)"
+            print("🛫 Selected departure airport for tracked: \(airport.iataCode)")
+        } else if trackedArrivalAirport == nil {
+            trackedArrivalAirport = airport
+            print("🛬 Selected arrival airport for tracked: \(airport.iataCode)")
+        }
+    }
+    
+    private func resetTrackedData() {
+        trackedDepartureAirport = nil
+        trackedArrivalAirport = nil
+        trackedFlightNumber = ""
+        trackedSelectedDate = nil
+        trackedSearchType = nil
+    }
+    
+    private func additionalFieldsView(for searchType: TrackedSearchType) -> some View {
+        VStack(spacing: 16) {
+            // Additional field based on search type
+            if searchType == .flight {
+                flightNumberField()
+            } else if searchType == .airport {
+                arrivalAirportField()
+            }
+            
+            // Date selection (show for both types)
+            dateSelectionView()
+        }
+    }
+    
+    private func flightNumberField() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Flight Number")
+                .font(.system(size: 16, weight: .semibold))
+            
+            HStack {
+                TextField("Enter flight number (e.g., 6E 123)", text: $trackedFlightNumber)
+                    .padding()
+                    .onChange(of: trackedFlightNumber) { newValue in
+                        // ADDED: Notify parent about flight number entry
+                        onFlightNumberEntered?(newValue)
+                        // Update viewModel as well
+                        viewModel.flightNumber = newValue
+                    }
+                
+                if !trackedFlightNumber.isEmpty {
+                    Button(action: {
+                        trackedFlightNumber = ""
+                        viewModel.flightNumber = ""
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                            .padding(.trailing)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.orange, lineWidth: 1)
+            )
+        }
+    }
+    
+    private func arrivalAirportField() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Arrival Airport (Optional)")
+                .font(.system(size: 16, weight: .semibold))
+            
+            HStack {
+                TextField("Enter arrival airport", text: $viewModel.arrivalAirportText)
+                    .padding()
+                
+                if !viewModel.arrivalAirportText.isEmpty {
+                    Button(action: {
+                        viewModel.arrivalAirportText = ""
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                            .padding(.trailing)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.orange, lineWidth: 1)
+            )
+            
+            // Show arrival airport results
+            if !viewModel.arrivalAirports.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(viewModel.arrivalAirports.prefix(3)) { airport in
+                        airportRowView(airport)
+                            .onTapGesture {
+                                // ADDED: Set as arrival airport for tracked tab
+                                if source == .trackedTab {
+                                    trackedArrivalAirport = airport
+                                    viewModel.arrivalAirportText = "\(airport.iataCode) - \(airport.city)"
+                                    viewModel.arrivalAirports = []
+                                    print("🛬 Selected arrival airport: \(airport.iataCode)")
+                                } else {
+                                    viewModel.selectArrivalAirport(airport)
+                                }
+                            }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func dateSelectionView() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Select Date")
+                .font(.system(size: 18))
+                .fontWeight(.bold)
+            
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    dateCard("Yesterday", "16 Jun, Mon", "yesterday")
+                    dateCard("Today", "17 Jun, Tue", "today")
+                }
+                
+                HStack(spacing: 12) {
+                    dateCard("Tomorrow", "18 Jun, Wed", "tomorrow")
+                    dateCard("Day After", "19 Jun, Thu", "dayafter")
+                }
+            }
+        }
+    }
+    
+    private func dateCard(_ title: String, _ date: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+            Text(date)
+                .font(.system(size: 12))
+                .foregroundColor(.gray)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(getSelectedDate() == value ? Color.orange : Color.gray.opacity(0.5), lineWidth: getSelectedDate() == value ? 2 : 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(getSelectedDate() == value ? Color.orange.opacity(0.1) : Color.clear)
+                )
+        )
+        .onTapGesture {
+            // ADDED: Enhanced date selection for tracked tab
+            if source == .trackedTab {
+                trackedSelectedDate = value
+                print("📅 Selected date for tracked: \(value)")
+            } else {
+                viewModel.selectedDate = value
+                onDateSelected?(value)
+            }
+        }
+    }
+    
+    private func getSelectedDate() -> String? {
+        if source == .trackedTab {
+            return trackedSelectedDate
+        } else {
+            return viewModel.selectedDate
+        }
+    }
+    
+    // MARK: - Keep all existing methods unchanged...
+    
     private func airlineRowView(_ airline: FlightTrackAirline) -> some View {
         HStack(spacing: 12) {
-            // Airline Code - safely unwrap iataCode
             Text(airline.iataCode ?? "??")
                 .font(.system(size: 16, weight: .bold))
                 .padding(8)
@@ -180,7 +425,6 @@ struct trackLocationSheet: View {
     
     private func airportRowView(_ airport: FlightTrackAirport) -> some View {
         HStack(spacing: 12) {
-            // Airport Code
             Text(airport.iataCode)
                 .font(.system(size: 16, weight: .bold))
                 .padding(8)
@@ -209,87 +453,86 @@ struct trackLocationSheet: View {
         .cornerRadius(12)
     }
     
-    private func additionalFieldsView(for searchType: TrackedSearchType) -> some View {
+    // ... (Keep all other existing methods exactly the same)
+    
+    private func scheduledTabContent() -> some View {
         VStack(spacing: 16) {
-            // Additional field based on search type
-            if searchType == .flight {
-                flightNumberField()
-            } else if searchType == .airport {
-                arrivalAirportField()
-            }
+            scheduledAirportSearchField()
             
-            // Date selection (show for both types)
-            dateSelectionView()
+            if !viewModel.airports.isEmpty {
+                scheduledAirportResultsList()
+            } else if viewModel.isLoading {
+                loadingView()
+            }
         }
     }
     
-    private func flightNumberField() -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Flight Number")
-                .font(.system(size: 16, weight: .semibold))
+    private func scheduledAirportSearchField() -> some View {
+        HStack {
+            TextField(getAirportSearchPlaceholder(), text: $viewModel.searchText)
+                .padding()
             
-            HStack {
-                TextField("Enter flight number (e.g., 6E 123)", text: $viewModel.flightNumber)
-                    .padding()
-                
-                if !viewModel.flightNumber.isEmpty {
-                    Button(action: {
-                        viewModel.flightNumber = ""
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                            .padding(.trailing)
-                    }
+            if !viewModel.searchText.isEmpty {
+                Button(action: {
+                    viewModel.clearSearch()
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.gray)
+                        .padding(.trailing)
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.orange, lineWidth: 1)
-            )
         }
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.orange, lineWidth: 1)
+        )
     }
     
-    private func arrivalAirportField() -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Arrival Airport")
-                .font(.system(size: 16, weight: .semibold))
-            
-            HStack {
-                TextField("Enter arrival airport", text: $viewModel.arrivalAirportText)
-                    .padding()
-                
-                if !viewModel.arrivalAirportText.isEmpty {
-                    Button(action: {
-                        viewModel.arrivalAirportText = ""
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                            .padding(.trailing)
-                    }
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.orange, lineWidth: 1)
-            )
-            
-            // Show arrival airport results
-            if !viewModel.arrivalAirports.isEmpty {
-                VStack(spacing: 8) {
-                    ForEach(viewModel.arrivalAirports.prefix(3)) { airport in
-                        airportRowView(airport)
-                            .onTapGesture {
-                                viewModel.selectArrivalAirport(airport)
-                            }
+    private func scheduledAirportResultsList() -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(viewModel.airports) { airport in
+                    scheduledAirportRowView(airport)
+                        .onTapGesture {
+                            selectAirport(airport)
+                        }
+                    
+                    if airport.id != viewModel.airports.last?.id {
+                        Divider()
                     }
                 }
             }
         }
+        .frame(maxHeight: 300)
+    }
+    
+    private func scheduledAirportRowView(_ airport: FlightTrackAirport) -> some View {
+        HStack(spacing: 12) {
+            Text(airport.iataCode)
+                .font(.system(size: 16, weight: .bold))
+                .padding(8)
+                .frame(width: 50, height: 50)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(8)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(airport.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Text("\(airport.city), \(airport.country)")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
     }
     
     private func defaultTrackedContent() -> some View {
         VStack(spacing: 24) {
-            // Popular Airlines
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Popular Airlines")
@@ -305,7 +548,6 @@ struct trackLocationSheet: View {
                 }
             }
             
-            // Popular Airports
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Popular Airports")
@@ -374,135 +616,6 @@ struct trackLocationSheet: View {
         }
     }
     
-    // MARK: - Scheduled Tab Content (existing functionality)
-    
-    private func scheduledTabContent() -> some View {
-        VStack(spacing: 16) {
-            // Airport search field for scheduled tabs
-            scheduledAirportSearchField()
-            
-            // Airport Search Results
-            if !viewModel.airports.isEmpty {
-                scheduledAirportResultsList()
-            } else if viewModel.isLoading {
-                loadingView()
-            }
-        }
-    }
-    
-    private func scheduledAirportSearchField() -> some View {
-        HStack {
-            TextField(getAirportSearchPlaceholder(), text: $viewModel.searchText)
-                .padding()
-            
-            if !viewModel.searchText.isEmpty {
-                Button(action: {
-                    viewModel.clearSearch()
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.gray)
-                        .padding(.trailing)
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.orange, lineWidth: 1)
-        )
-    }
-    
-    private func scheduledAirportResultsList() -> some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(viewModel.airports) { airport in
-                    scheduledAirportRowView(airport)
-                        .onTapGesture {
-                            selectAirport(airport)
-                        }
-                    
-                    if airport.id != viewModel.airports.last?.id {
-                        Divider()
-                    }
-                }
-            }
-        }
-        .frame(maxHeight: 300)
-    }
-    
-    private func scheduledAirportRowView(_ airport: FlightTrackAirport) -> some View {
-        HStack(spacing: 12) {
-            // Airport Code
-            Text(airport.iataCode)
-                .font(.system(size: 16, weight: .bold))
-                .padding(8)
-                .frame(width: 50, height: 50)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(airport.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
-                
-                Text("\(airport.city), \(airport.country)")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
-    }
-    
-    // MARK: - Common Components
-    
-    private func dateSelectionView() -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Select Date")
-                .font(.system(size: 18))
-                .fontWeight(.bold)
-            
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    dateCard("Yesterday", "16 Jun, Mon", "yesterday")
-                    dateCard("Today", "17 Jun, Tue", "today")
-                }
-                
-                HStack(spacing: 12) {
-                    dateCard("Tomorrow", "18 Jun, Wed", "tomorrow")
-                    dateCard("Day After", "19 Jun, Thu", "dayafter")
-                }
-            }
-        }
-    }
-    
-    private func dateCard(_ title: String, _ date: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-            Text(date)
-                .font(.system(size: 12))
-                .foregroundColor(.gray)
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(viewModel.selectedDate == value ? Color.orange : Color.gray.opacity(0.5), lineWidth: viewModel.selectedDate == value ? 2 : 1)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(viewModel.selectedDate == value ? Color.orange.opacity(0.1) : Color.clear)
-                )
-        )
-        .onTapGesture {
-            viewModel.selectedDate = value
-            // Notify parent about date selection for tracked tab
-            if source == .trackedTab {
-                onDateSelected?(value)
-            }
-        }
-    }
-    
     private func loadingView() -> some View {
         VStack(spacing: 16) {
             ProgressView()
@@ -513,8 +626,6 @@ struct trackLocationSheet: View {
         }
         .frame(height: 100)
     }
-    
-    // MARK: - Helper Methods
     
     private func getSheetTitle() -> String {
         switch source {
@@ -545,17 +656,21 @@ struct trackLocationSheet: View {
     }
 }
 
-// MARK: - Default Initializer for Preview
+// MARK: - Convenience Initializers
 extension trackLocationSheet {
-    init() {
+    
+    // Convenience initializer for preview
+    init(forPreview: Bool = true) {
         self._isPresented = .constant(true)
         self.source = .trackedTab
         self.searchType = nil
         self.onLocationSelected = { _ in }
         self.onDateSelected = nil
+        self.onFlightNumberEntered = nil
+        self.onSearchCompleted = nil
     }
 }
 
 #Preview {
-    trackLocationSheet()
+    trackLocationSheet(forPreview: true)
 }
