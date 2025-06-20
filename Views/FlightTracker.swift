@@ -19,12 +19,17 @@ struct FlightTrackerScreen: View {
     @State private var trackedFlightNumber: String = ""
     @State private var trackedSearchType: TrackedSearchType?
     
-    // ADDED: Navigation and API response for tracked tab
-    @State private var showingTrackedDetails = false
+    // UPDATED: Navigation states for tracked tab
+    @State private var showingTrackedDetails = false // For airport search results
+    @State private var showingFlightDetail = false   // For flight search results
     @State private var trackedFlightDetail: FlightDetail?
     @State private var trackedScheduleResults: [ScheduleResult] = []
     @State private var trackedAPIError: String?
     @State private var isLoadingTrackedResults = false
+    
+    // ADDED: Flight detail navigation parameters
+    @State private var flightDetailNumber: String = ""
+    @State private var flightDetailDate: String = ""
     
     // ADDED: Recently viewed flights for tracked tab
     @State private var recentlyViewedFlights: [TrackedFlightData] = []
@@ -68,12 +73,21 @@ struct FlightTrackerScreen: View {
                     // Content based on selected tab
                     if selectedTab == 0 {
                         trackedTabContent
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
                     } else {
                         scheduledTabContent
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
                     }
                     
                     Spacer()
                 }
+                .animation(.easeInOut(duration: 0.3), value: selectedTab) // ADDED: Smooth tab transition
                 .onAppear {
                     loadRecentSearchData()
                     loadRecentlyViewedFlights()
@@ -94,21 +108,36 @@ struct FlightTrackerScreen: View {
                 onFlightNumberEntered: currentSheetSource == .trackedTab ? handleFlightNumberEntered : nil,
                 onSearchCompleted: currentSheetSource == .trackedTab ? handleTrackedSearchCompleted : nil
             )
+            .transition(.move(edge: .bottom).combined(with: .opacity)) // ADDED: Better sheet animation
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showingTrackLocationSheet)
         }
+        // UPDATED: Better navigation animations for TrackedDetailsScreen
         .fullScreenCover(isPresented: $showingTrackedDetails) {
-            if let flightDetail = trackedFlightDetail {
-                TrackedDetailsScreen(
-                    flightDetail: flightDetail,
-                    scheduleResults: [],
-                    searchType: .flight
-                )
-            } else if !trackedScheduleResults.isEmpty {
+            if !trackedScheduleResults.isEmpty {
                 TrackedDetailsScreen(
                     flightDetail: nil,
                     scheduleResults: trackedScheduleResults,
                     searchType: .airport
                 )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
             }
+        }
+        // UPDATED: Better navigation animations for FlightDetailScreen
+        .fullScreenCover(isPresented: $showingFlightDetail) {
+            FlightDetailScreen(
+                flightNumber: flightDetailNumber,
+                date: flightDetailDate,
+                onFlightViewed: { flight in
+                    addRecentlyViewedFlight(flight)
+                }
+            )
+            .transition(.asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .move(edge: .top).combined(with: .opacity)
+            ))
         }
     }
     
@@ -139,6 +168,7 @@ struct FlightTrackerScreen: View {
         }
     }
     
+    // UPDATED: Better animation for tracked search completion
     @MainActor
     private func performTrackedSearch(
         searchType: TrackedSearchType,
@@ -152,7 +182,7 @@ struct FlightTrackerScreen: View {
         
         do {
             if searchType == .flight, let flightNumber = flightNumber {
-                // Call flight detail API
+                // Call flight detail API for airline search
                 print("🔍 Calling flight detail API for: \(flightNumber), date: \(date)")
                 let response = try await networkManager.fetchFlightDetail(flightNumber: flightNumber, date: date)
                 trackedFlightDetail = response.result
@@ -161,8 +191,19 @@ struct FlightTrackerScreen: View {
                 // Add to recently viewed
                 addRecentlyViewedFlight(createTrackedFlightData(from: response.result, date: date))
                 
+                // UPDATED: Navigate to FlightDetailScreen with animation delay
+                flightDetailNumber = flightNumber
+                flightDetailDate = date
+                
+                // Small delay for smooth animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        showingFlightDetail = true
+                    }
+                }
+                
             } else if searchType == .airport {
-                // Call schedules API
+                // Call schedules API for airport search
                 let departureId = departureAirport?.iataCode
                 let arrivalId = arrivalAirport?.iataCode
                 
@@ -174,10 +215,14 @@ struct FlightTrackerScreen: View {
                 )
                 trackedScheduleResults = response.results
                 trackedFlightDetail = nil
+                
+                // UPDATED: Navigate to TrackedDetailsScreen with animation delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        showingTrackedDetails = true
+                    }
+                }
             }
-            
-            // Navigate to TrackedDetailsScreen
-            showingTrackedDetails = true
             
         } catch {
             trackedAPIError = error.localizedDescription
@@ -457,6 +502,7 @@ struct FlightTrackerScreen: View {
         }
     }
     
+    // UPDATED: Tab Selection with Better Animation
     private var tabSelectionView: some View {
         HStack(spacing: 0) {
             Spacer()
@@ -464,9 +510,11 @@ struct FlightTrackerScreen: View {
             HStack(spacing: 0) {
                 // Tracked Tab
                 Button(action: {
-                    selectedTab = 0
-                    currentSheetSource = .trackedTab
-                    clearCurrentSessionData()
+                    withAnimation(.easeInOut(duration: 0.3)) { // ADDED: Smooth animation
+                        selectedTab = 0
+                        currentSheetSource = .trackedTab
+                        clearCurrentSessionData()
+                    }
                 }) {
                     Text("Tracked")
                         .font(selectedTab == 0 ? Font.system(size: 13, weight: .bold) : Font.system(size: 13, weight: .regular))
@@ -477,14 +525,18 @@ struct FlightTrackerScreen: View {
                             selectedTab == 0 ? Color.white : Color.clear
                         )
                         .cornerRadius(20)
+                        .scaleEffect(selectedTab == 0 ? 1.05 : 1.0) // ADDED: Subtle scale effect
+                        .animation(.easeInOut(duration: 0.2), value: selectedTab)
                 }
                 
                 // Scheduled Tab
                 Button(action: {
-                    selectedTab = 1
-                    currentSheetSource = .scheduledDeparture
-                    clearCurrentSessionData()
-                    loadLastSearchedAirport()
+                    withAnimation(.easeInOut(duration: 0.3)) { // ADDED: Smooth animation
+                        selectedTab = 1
+                        currentSheetSource = .scheduledDeparture
+                        clearCurrentSessionData()
+                        loadLastSearchedAirport()
+                    }
                 }) {
                     Text("Scheduled")
                         .font(selectedTab == 1 ? Font.system(size: 13, weight: .bold) : Font.system(size: 13, weight: .regular))
@@ -495,6 +547,8 @@ struct FlightTrackerScreen: View {
                             selectedTab == 1 ? Color.white : Color.clear
                         )
                         .cornerRadius(20)
+                        .scaleEffect(selectedTab == 1 ? 1.05 : 1.0) // ADDED: Subtle scale effect
+                        .animation(.easeInOut(duration: 0.2), value: selectedTab)
                 }
             }
             .padding(4)
@@ -805,33 +859,48 @@ struct FlightTrackerScreen: View {
         .padding(.top, 20)
     }
     
+    // UPDATED: Enhanced Error View with Animation
     private func errorView(_ message: String) -> some View {
         VStack(spacing: 20) {
             Spacer()
+            
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 50))
                 .foregroundColor(.orange)
+                .scaleEffect(scheduleError != nil ? 1.0 : 0.5)
+                .animation(.spring(response: 0.6, dampingFraction: 0.6), value: scheduleError)
+            
             Text("Error loading flights")
                 .font(.system(size: 18, weight: .semibold))
+                .opacity(scheduleError != nil ? 1.0 : 0.0)
+                .animation(.easeInOut(duration: 0.4).delay(0.2), value: scheduleError)
+            
             Text(message)
                 .font(.system(size: 14))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
+                .opacity(scheduleError != nil ? 1.0 : 0.0)
+                .animation(.easeInOut(duration: 0.4).delay(0.4), value: scheduleError)
+            
             Spacer()
         }
+        .transition(.opacity.combined(with: .scale))
     }
     
+    // UPDATED: Enhanced Loading States with Animation
     private var loadingSchedulesView: some View {
         VStack(spacing: 0) {
             // Flight List Header
             flightListHeader
             
-            // Shimmer Loading
+            // Shimmer Loading with staggered animation
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(0..<6, id: \.self) { index in
                         FlightRowShimmer()
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                            .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.1), value: isLoadingSchedules)
                         
                         if index < 5 {
                             Divider()
@@ -1077,6 +1146,12 @@ struct FlightTrackerScreen: View {
         trackedFlightDetail = nil
         trackedScheduleResults = []
         trackedAPIError = nil
+        
+        // ADDED: Reset navigation states
+        showingTrackedDetails = false
+        showingFlightDetail = false
+        flightDetailNumber = ""
+        flightDetailDate = ""
         
         if selectedTab == 0 {
             currentSheetSource = .trackedTab
@@ -1365,7 +1440,7 @@ struct FlightTrackerScreen: View {
         }
     }
     
-    // MARK: - Data Conversion Methods
+    // MARK: - FIXED: Updated Data Conversion Method to Handle Optional Airport
     
     private func convertScheduleToFlightInfo(_ schedule: ScheduleResult, departureAirport: FlightTrackAirport?, arrivalAirport: FlightTrackAirport?) -> FlightInfo {
         let departureTime = formatTimeString(schedule.departureTime)
@@ -1375,15 +1450,28 @@ struct FlightTrackerScreen: View {
         let destinationName: String
         
         if currentSheetSource == .scheduledDeparture {
-            destination = schedule.airport.iataCode
-            destinationName = schedule.airport.city
+            // For departures, show the arrival airport
+            if let airport = schedule.airport {
+                destination = airport.iataCode
+                destinationName = airport.city
+            } else if let arrAirport = arrivalAirport {
+                destination = arrAirport.iataCode
+                destinationName = arrAirport.city
+            } else {
+                destination = "---"
+                destinationName = "Unknown"
+            }
         } else {
+            // For arrivals, show the departure airport
             if let depAirport = departureAirport {
                 destination = depAirport.iataCode
                 destinationName = depAirport.city
+            } else if let airport = schedule.airport {
+                destination = airport.iataCode
+                destinationName = airport.city
             } else {
-                destination = schedule.airport.iataCode
-                destinationName = schedule.airport.city
+                destination = "---"
+                destinationName = "Unknown"
             }
         }
         

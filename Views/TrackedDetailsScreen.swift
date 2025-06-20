@@ -1,4 +1,4 @@
-// Enhanced TrackedDetailsScreen.swift - Accept dynamic data
+// Enhanced TrackedDetailsScreen.swift - Complete updated version with animations and optional airport handling
 
 import SwiftUI
 
@@ -16,12 +16,17 @@ struct TrackedDetailsScreen: View {
     let scheduleResults: [ScheduleResult]
     let searchType: TrackedSearchResultType
     
+    // ADDED: Animation states
+    @State private var isAppearing = false
+    @State private var cardsAppeared = false
+    
     // ADDED: Computed properties for dynamic header values
     private var fromText: String {
         if let flightDetail = flightDetail {
             return flightDetail.departure.airport.iataCode
         } else if let firstFlight = scheduleResults.first {
-            return firstFlight.airport.iataCode
+            // FIXED: Handle optional airport field
+            return firstFlight.airport?.iataCode ?? "DEP"
         } else {
             return "---"
         }
@@ -53,7 +58,7 @@ struct TrackedDetailsScreen: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // UPDATED: Use TrackCollapseHeader instead of CustomHeaderView
+            // UPDATED: Use TrackCollapseHeader with animation
             TrackCollapseHeader(
                 fromText: fromText,
                 toText: toText,
@@ -65,35 +70,39 @@ struct TrackedDetailsScreen: View {
                     print("Header tapped")
                 },
                 handleBackNavigation: {
-                    dismiss()
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        dismiss()
+                    }
                 },
                 shouldShowBackButton: true
             )
+            .opacity(isAppearing ? 1 : 0)
+            .offset(y: isAppearing ? 0 : -50)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: isAppearing)
             
-            // Main Content
+            // Main Content with enhanced animations
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if searchType == .flight, let flightDetail = flightDetail {
-                        // Show single flight detail
+                        // Show single flight detail with animation
                         SingleFlightCard(flightDetail: flightDetail)
+                            .opacity(cardsAppeared ? 1 : 0)
+                            .offset(y: cardsAppeared ? 0 : 30)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: cardsAppeared)
                     } else if searchType == .airport, !scheduleResults.isEmpty {
-                        // Show multiple flights from schedule
+                        // Show multiple flights from schedule with staggered animation
                         ForEach(scheduleResults.indices, id: \.self) { index in
                             ScheduleFlightCard(scheduleResult: scheduleResults[index])
+                                .opacity(cardsAppeared ? 1 : 0)
+                                .offset(y: cardsAppeared ? 0 : 30)
+                                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3 + Double(index) * 0.1), value: cardsAppeared)
                         }
                     } else {
-                        // Empty state
-                        VStack(spacing: 20) {
-                            Spacer()
-                            Image(systemName: "airplane.circle")
-                                .font(.system(size: 60))
-                                .foregroundColor(.gray.opacity(0.5))
-                            Text("No flight data available")
-                                .font(.headline)
-                                .foregroundColor(.gray)
-                            Spacer()
-                        }
-                        .frame(height: 400)
+                        // Empty state with animation
+                        emptyStateView
+                            .opacity(cardsAppeared ? 1 : 0)
+                            .offset(y: cardsAppeared ? 0 : 30)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: cardsAppeared)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -102,6 +111,47 @@ struct TrackedDetailsScreen: View {
             .background(Color(.systemGroupedBackground))
         }
         .navigationBarHidden(true)
+        .onAppear {
+            // Trigger animations on appear
+            withAnimation {
+                isAppearing = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation {
+                    cardsAppeared = true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Enhanced Empty State View
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            
+            Image(systemName: "airplane.circle")
+                .font(.system(size: 60))
+                .foregroundColor(.gray.opacity(0.5))
+                .scaleEffect(cardsAppeared ? 1.0 : 0.5)
+                .animation(.spring(response: 0.8, dampingFraction: 0.6), value: cardsAppeared)
+            
+            VStack(spacing: 8) {
+                Text("No flight data available")
+                    .font(.headline)
+                    .foregroundColor(.gray)
+                
+                Text("Please try searching again with different criteria")
+                    .font(.subheadline)
+                    .foregroundColor(.gray.opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
+            .opacity(cardsAppeared ? 1 : 0)
+            .animation(.easeInOut(duration: 0.4).delay(0.5), value: cardsAppeared)
+            
+            Spacer()
+        }
+        .frame(height: 400)
     }
     
     // MARK: - Helper Methods
@@ -129,35 +179,41 @@ struct TrackedDetailsScreen: View {
     }
 }
 
-// MARK: - Single Flight Detail Card (for flight number search)
+// MARK: - Single Flight Detail Card (for flight number search) - Enhanced with Animation
 struct SingleFlightCard: View {
     let flightDetail: FlightDetail
+    @State private var isAnimated = false
     
     var body: some View {
         VStack(spacing: 0) {
             // Header with airline info and status
             HStack {
                 HStack(spacing: 8) {
-                    // Airline logo
+                    // Airline logo with animation
                     ZStack {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(Color.blue)
                             .frame(width: 28, height: 28)
+                            .scaleEffect(isAnimated ? 1.0 : 0.8)
                         
                         Text(flightDetail.airline.iataCode.prefix(2))
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
+                            .opacity(isAnimated ? 1.0 : 0.0)
                     }
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1), value: isAnimated)
                     
                     Text("\(flightDetail.airline.name) • \(flightDetail.flightIata)")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .opacity(isAnimated ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.4).delay(0.2), value: isAnimated)
                 }
                 
                 Spacer()
                 
-                // Status badge
+                // Status badge with animation
                 Text(flightDetail.status ?? "Scheduled")
                     .font(.caption)
                     .fontWeight(.medium)
@@ -172,17 +228,22 @@ struct SingleFlightCard: View {
                                     .stroke(statusColor(flightDetail.status).opacity(0.3), lineWidth: 1)
                             )
                     )
+                    .scaleEffect(isAnimated ? 1.0 : 0.8)
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.3), value: isAnimated)
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
             
-            // Flight details
+            // Flight details with staggered animation
             HStack(alignment: .center, spacing: 0) {
                 // Departure
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatTime(flightDetail.departure.scheduled.local))
                         .font(.title2)
                         .fontWeight(.medium)
+                        .opacity(isAnimated ? 1.0 : 0.0)
+                        .offset(x: isAnimated ? 0 : -20)
                     
                     HStack(spacing: 4) {
                         Text(flightDetail.departure.airport.iataCode)
@@ -192,24 +253,31 @@ struct SingleFlightCard: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .offset(x: isAnimated ? 0 : -20)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4), value: isAnimated)
                 
-                // Flight path visualization
+                // Flight path visualization with animation
                 VStack(spacing: 4) {
                     HStack(spacing: 0) {
                         Circle()
                             .fill(Color.gray.opacity(0.3))
                             .frame(width: 8, height: 8)
+                            .scaleEffect(isAnimated ? 1.0 : 0.5)
                         
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
                             .frame(height: 1)
+                            .scaleEffect(x: isAnimated ? 1.0 : 0.1, y: 1.0)
                         
                         Circle()
                             .fill(Color.gray.opacity(0.3))
                             .frame(width: 8, height: 8)
+                            .scaleEffect(isAnimated ? 1.0 : 0.5)
                     }
+                    .animation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.6), value: isAnimated)
                     
                     Text(calculateDuration(
                         departure: flightDetail.departure.scheduled.local,
@@ -217,6 +285,8 @@ struct SingleFlightCard: View {
                     ))
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.3).delay(0.8), value: isAnimated)
                 }
                 .frame(maxWidth: .infinity)
                 
@@ -225,6 +295,8 @@ struct SingleFlightCard: View {
                     Text(formatTime(flightDetail.arrival.scheduled.local))
                         .font(.title2)
                         .fontWeight(.medium)
+                        .opacity(isAnimated ? 1.0 : 0.0)
+                        .offset(x: isAnimated ? 0 : 20)
                     
                     HStack(spacing: 4) {
                         Text(flightDetail.arrival.airport.iataCode)
@@ -234,8 +306,11 @@ struct SingleFlightCard: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .offset(x: isAnimated ? 0 : 20)
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.5), value: isAnimated)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -246,6 +321,8 @@ struct SingleFlightCard: View {
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundColor(.green)
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.3).delay(0.9), value: isAnimated)
                 
                 Spacer()
             }
@@ -255,6 +332,9 @@ struct SingleFlightCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
+        .onAppear {
+            isAnimated = true
+        }
     }
     
     private func statusColor(_ status: String?) -> Color {
@@ -355,35 +435,41 @@ struct SingleFlightCard: View {
     }
 }
 
-// MARK: - Schedule Flight Card (for airport search results)
+// MARK: - Schedule Flight Card (for airport search results) - UPDATED and Enhanced
 struct ScheduleFlightCard: View {
     let scheduleResult: ScheduleResult
+    @State private var isAnimated = false
     
     var body: some View {
         VStack(spacing: 0) {
             // Header with airline info and status
             HStack {
                 HStack(spacing: 8) {
-                    // Airline logo
+                    // Airline logo with animation
                     ZStack {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(Color.blue)
                             .frame(width: 28, height: 28)
+                            .scaleEffect(isAnimated ? 1.0 : 0.8)
                         
                         Text(scheduleResult.airline.iataCode?.prefix(2) ?? "??")
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
+                            .opacity(isAnimated ? 1.0 : 0.0)
                     }
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1), value: isAnimated)
                     
                     Text("\(scheduleResult.airline.name) • \(scheduleResult.flightNumber)")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .opacity(isAnimated ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.4).delay(0.2), value: isAnimated)
                 }
                 
                 Spacer()
                 
-                // Status badge
+                // Status badge with animation
                 Text(scheduleResult.status.capitalized)
                     .font(.caption)
                     .fontWeight(.medium)
@@ -398,17 +484,22 @@ struct ScheduleFlightCard: View {
                                     .stroke(statusColor(scheduleResult.status).opacity(0.3), lineWidth: 1)
                             )
                     )
+                    .scaleEffect(isAnimated ? 1.0 : 0.8)
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.3), value: isAnimated)
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
             
-            // Flight details
+            // Flight details with staggered animation
             HStack(alignment: .center, spacing: 0) {
                 // Departure
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatTime(scheduleResult.departureTime))
                         .font(.title2)
                         .fontWeight(.medium)
+                        .opacity(isAnimated ? 1.0 : 0.0)
+                        .offset(x: isAnimated ? 0 : -20)
                     
                     HStack(spacing: 4) {
                         Text("DEP")
@@ -418,24 +509,31 @@ struct ScheduleFlightCard: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .offset(x: isAnimated ? 0 : -20)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4), value: isAnimated)
                 
-                // Flight path visualization
+                // Flight path visualization with animation
                 VStack(spacing: 4) {
                     HStack(spacing: 0) {
                         Circle()
                             .fill(Color.gray.opacity(0.3))
                             .frame(width: 8, height: 8)
+                            .scaleEffect(isAnimated ? 1.0 : 0.5)
                         
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
                             .frame(height: 1)
+                            .scaleEffect(x: isAnimated ? 1.0 : 0.1, y: 1.0)
                         
                         Circle()
                             .fill(Color.gray.opacity(0.3))
                             .frame(width: 8, height: 8)
+                            .scaleEffect(isAnimated ? 1.0 : 0.5)
                     }
+                    .animation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.6), value: isAnimated)
                     
                     Text(calculateScheduleDuration(
                         departure: scheduleResult.departureTime,
@@ -443,37 +541,56 @@ struct ScheduleFlightCard: View {
                     ))
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.3).delay(0.8), value: isAnimated)
                 }
                 .frame(maxWidth: .infinity)
                 
-                // Arrival
+                // Arrival - UPDATED: Handle optional airport
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(formatTime(scheduleResult.arrivalTime))
                         .font(.title2)
                         .fontWeight(.medium)
+                        .opacity(isAnimated ? 1.0 : 0.0)
+                        .offset(x: isAnimated ? 0 : 20)
                     
                     HStack(spacing: 4) {
-                        Text(scheduleResult.airport.iataCode)
+                        // FIXED: Handle optional airport field
+                        Text(scheduleResult.airport?.iataCode ?? "ARR")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Text(formatDate(scheduleResult.arrivalTime))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .offset(x: isAnimated ? 0 : 20)
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.5), value: isAnimated)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             
-            // Direct flight indicator
+            // Direct flight indicator and destination
             HStack {
                 Text("Direct")
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundColor(.green)
+                    .opacity(isAnimated ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.3).delay(0.9), value: isAnimated)
                 
                 Spacer()
+                
+                // ADDED: Show destination if available
+                if let airport = scheduleResult.airport {
+                    Text("To \(airport.city)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .opacity(isAnimated ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.3).delay(1.0), value: isAnimated)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
@@ -481,6 +598,9 @@ struct ScheduleFlightCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
+        .onAppear {
+            isAnimated = true
+        }
     }
     
     private func statusColor(_ status: String) -> Color {

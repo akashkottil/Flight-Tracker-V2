@@ -82,7 +82,7 @@ struct TrackCollapseHeader: View {
             GeometryReader { geo in
                 VStack(spacing: 0) {
                     Color("searchcardBackground")
-                        .frame(height: geo.size.height)
+                        .frame(height: geo.size.height+20)
                     Color("scroll")
                 }
                 .edgesIgnoringSafeArea(.all)

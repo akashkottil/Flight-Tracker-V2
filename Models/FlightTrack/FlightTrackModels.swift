@@ -1,4 +1,4 @@
-// Models/FlightTrack/FlightTrackModels.swift
+// Models/FlightTrack/FlightTrackModels.swift - COMPLETE CORRECTED VERSION
 import Foundation
 
 // MARK: - Flight Track Airport Response Models
@@ -122,6 +122,7 @@ struct ScheduleResponse: Codable {
     }
 }
 
+// FIXED: Made airport field optional to handle null values from API
 struct ScheduleResult: Codable, Identifiable {
     let id = UUID()
     let airline: ScheduleAirline
@@ -130,7 +131,7 @@ struct ScheduleResult: Codable, Identifiable {
     let operatedBy: String?
     let departureTime: String
     let arrivalTime: String
-    let airport: ScheduleAirport
+    let airport: ScheduleAirport? // FIXED: Made optional to handle null values
     
     enum CodingKeys: String, CodingKey {
         case airline
