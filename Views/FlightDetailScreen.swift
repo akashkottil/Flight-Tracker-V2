@@ -73,6 +73,7 @@ struct FlightDetailScreen: View {
                 }
             }
         }
+        .navigationBarBackButtonHidden(true)
         .onAppear {
             Task {
                 await fetchFlightDetails()
