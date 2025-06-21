@@ -19,6 +19,9 @@ struct FlightTrackerScreen: View {
     @State private var trackedFlightNumber: String = ""
     @State private var trackedSearchType: TrackedSearchType?
     
+    // ADDED: Calendar integration
+    @State private var selectedCustomDate: Date?
+    
     // UPDATED: Navigation states for tracked tab
     @State private var showingTrackedDetails = false // For airport search results
     @State private var showingFlightDetail = false   // For flight search results
@@ -106,7 +109,8 @@ struct FlightTrackerScreen: View {
                 onLocationSelected: handleLocationSelected,
                 onDateSelected: currentSheetSource == .trackedTab ? handleDateSelected : nil,
                 onFlightNumberEntered: currentSheetSource == .trackedTab ? handleFlightNumberEntered : nil,
-                onSearchCompleted: currentSheetSource == .trackedTab ? handleTrackedSearchCompleted : nil
+                onSearchCompleted: currentSheetSource == .trackedTab ? handleTrackedSearchCompleted : nil,
+                onCustomDateSelected: currentSheetSource == .trackedTab ? handleCustomDateSelected : nil
             )
             .transition(.move(edge: .bottom).combined(with: .opacity)) // ADDED: Better sheet animation
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showingTrackLocationSheet)
@@ -146,6 +150,12 @@ struct FlightTrackerScreen: View {
     private func handleFlightNumberEntered(_ flightNumber: String) {
         trackedFlightNumber = flightNumber
         print("✈️ Flight number entered: \(flightNumber)")
+    }
+    
+    // ADDED: Calendar integration handler
+    private func handleCustomDateSelected(_ date: Date) {
+        selectedCustomDate = date
+        print("📅 Custom date selected: \(date)")
     }
     
     private func handleTrackedSearchCompleted(searchType: TrackedSearchType, flightNumber: String?, departureAirport: FlightTrackAirport?, arrivalAirport: FlightTrackAirport?, selectedDate: String?) {
@@ -401,6 +411,7 @@ struct FlightTrackerScreen: View {
         )
     }
     
+    // UPDATED: Handle custom dates in API format conversion
     private func convertDateToAPIFormat(_ dateSelection: String) -> String {
         let calendar = Calendar.current
         let today = Date()
@@ -417,6 +428,13 @@ struct FlightTrackerScreen: View {
         case "dayafter":
             let dayAfter = calendar.date(byAdding: .day, value: 2, to: today)!
             return formatDateForAPI(dayAfter)
+        case "custom":
+            // ADDED: Handle custom date from calendar
+            if let customDate = selectedCustomDate {
+                return formatDateForAPI(customDate)
+            } else {
+                return formatDateForAPI(today)
+            }
         default:
             return formatDateForAPI(today)
         }
@@ -707,24 +725,40 @@ struct FlightTrackerScreen: View {
     
     private var trackedSearchFieldView: some View {
         HStack {
-            TextField("Try flight number \"6E 6083\"", text: $searchText)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color.white)
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.black.opacity(0.3), lineWidth: 1)
-                )
-                .font(.system(size: 14))
-                .fontWeight(.semibold)
-                .onTapGesture {
-                    openTrackLocationSheet(source: .trackedTab)
+            HStack {
+                if !searchText.isEmpty {
+                    // Show the current search text
+                    Text(searchText)
+                        .foregroundColor(.black)
+                        .font(.system(size: 14, weight: .semibold))
+                } else {
+                    // Show placeholder text
+                    Text("Try flight number \"6E 6083\"")
+                        .foregroundColor(.gray)
+                        .font(.system(size: 14, weight: .semibold))
                 }
+
+                Spacer()
+
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.white)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.black.opacity(0.3), lineWidth: 1)
+            )
+            .onTapGesture {
+                openTrackLocationSheet(source: .trackedTab)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
     }
+
     
     private var scheduledSearchFieldView: some View {
         HStack {
@@ -1152,6 +1186,9 @@ struct FlightTrackerScreen: View {
         showingFlightDetail = false
         flightDetailNumber = ""
         flightDetailDate = ""
+        
+        // ADDED: Clear custom date when switching tabs
+        selectedCustomDate = nil
         
         if selectedTab == 0 {
             currentSheetSource = .trackedTab

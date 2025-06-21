@@ -679,7 +679,7 @@
 
 
 
-// Enhanced FlightSearchBottomSheet.swift - Add tracked tab completion logic with progressive input display
+// Enhanced FlightSearchBottomSheet.swift - Add tracked tab completion logic with progressive input display and calendar integration
 
 import SwiftUI
 
@@ -694,6 +694,9 @@ struct trackLocationSheet: View {
     let onFlightNumberEntered: ((String) -> Void)?
     let onSearchCompleted: ((TrackedSearchType, String?, FlightTrackAirport?, FlightTrackAirport?, String?) -> Void)?
     
+    // ADDED: Calendar integration callback
+    let onCustomDateSelected: ((Date) -> Void)?
+    
     @StateObject private var viewModel = AirportSearchViewModel()
     @State private var selectedAirport: FlightTrackAirport?
     
@@ -706,6 +709,10 @@ struct trackLocationSheet: View {
     
     // ADDED: Progressive display states
     @State private var showDateForAirportSearch: Bool = false
+    
+    // ADDED: Calendar integration states
+    @State private var showingTrackCalendar = false
+    @State private var selectedCustomDate: Date?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -747,6 +754,24 @@ struct trackLocationSheet: View {
         .background(Color.white)
         .onAppear {
             viewModel.shouldPerformMixedSearch = (source == .trackedTab)
+        }
+        .sheet(isPresented: $showingTrackCalendar) {
+            TrackCalendar(
+                isPresented: $showingTrackCalendar,
+                onDateSelected: { selectedDate in
+                    selectedCustomDate = selectedDate
+                    // Handle the date selection
+                    if source == .trackedTab {
+                        trackedSelectedDate = "custom"
+                        print("📅 Selected custom date for tracked: \(selectedDate)")
+                    } else {
+                        viewModel.selectedDate = "custom"
+                        onDateSelected?("custom")
+                    }
+                    // Notify parent about custom date
+                    onCustomDateSelected?(selectedDate)
+                }
+            )
         }
     }
     
@@ -836,13 +861,6 @@ struct trackLocationSheet: View {
                 RoundedRectangle(cornerRadius: 20)
                     .stroke(Color.orange, lineWidth: 1)
             )
-            
-//            if !viewModel.searchText.isEmpty {
-//                Text("Search results for \"\(viewModel.searchText)\"")
-//                    .font(.caption)
-//                    .foregroundColor(.gray)
-//                    .padding(.horizontal, 4)
-//            }
         }
     }
     
@@ -924,6 +942,7 @@ struct trackLocationSheet: View {
         trackedSelectedDate = nil
         trackedSearchType = nil
         showDateForAirportSearch = false
+        selectedCustomDate = nil
     }
     
     // MODIFIED: Progressive display logic for additional fields
@@ -957,9 +976,6 @@ struct trackLocationSheet: View {
     
     private func flightNumberField() -> some View {
         VStack(alignment: .leading, spacing: 8) {
-//            Text("Flight Number")
-//                .font(.system(size: 16, weight: .semibold))
-            
             HStack {
                 TextField("Enter flight number (e.g., 6E 123)", text: $trackedFlightNumber)
                     .padding()
@@ -990,9 +1006,6 @@ struct trackLocationSheet: View {
     
     private func arrivalAirportField() -> some View {
         VStack(alignment: .leading, spacing: 8) {
-//            Text("Arrival Airport (Optional)")
-//                .font(.system(size: 16, weight: .semibold))
-            
             HStack {
                 TextField("Enter arrival airport", text: $viewModel.arrivalAirportText)
                     .padding()
@@ -1031,27 +1044,11 @@ struct trackLocationSheet: View {
                     }
                 }
             }
-            
-            // ADDED: Continue without arrival airport button
-//            if trackedArrivalAirport == nil && !showDateForAirportSearch {
-//                Button(action: {
-//                    showDateForAirportSearch = true
-//                    viewModel.arrivalAirportText = ""
-//                    viewModel.arrivalAirports = []
-//                }) {
-//                    HStack {
-//                        Image(systemName: "arrow.right.circle")
-//                        Text("Continue without arrival airport")
-//                    }
-//                    .font(.system(size: 14, weight: .medium))
-//                    .foregroundColor(.orange)
-//                    .padding(.vertical, 8)
-//                }
-//            }
         }
     }
     
-     func dateSelectionView() -> some View {
+    // UPDATED: Date selection view with calendar integration
+    func dateSelectionView() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Select Date")
                 .font(.system(size: 14))
@@ -1066,13 +1063,50 @@ struct trackLocationSheet: View {
                 
                 HStack(spacing: 12) {
                     dateCard("Tomorrow", "18 Jun, Wed", "tomorrow")
-                    dateCard("Custom Date", "Pick another date", "")
+                    customDateCard() // NEW: Calendar integration
                 }
             }
             .frame(maxWidth: .infinity)
         }
     }
-       
+    
+    // ADDED: Custom date card with calendar integration
+    private func customDateCard() -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Custom Date")
+                .font(.system(size: 14, weight: .medium))
+            
+            if let customDate = selectedCustomDate {
+                Text(formatCustomDate(customDate))
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary)
+            } else {
+                Text("Pick another date")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(getSelectedDate() == "custom" ? Color.orange : Color.gray.opacity(0.5), lineWidth: getSelectedDate() == "custom" ? 2 : 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(getSelectedDate() == "custom" ? Color.orange.opacity(0.1) : Color.clear)
+                )
+        )
+        .onTapGesture {
+            showingTrackCalendar = true
+        }
+    }
+    
+    // ADDED: Format custom date helper
+    private func formatCustomDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd MMM, EEE"
+        return formatter.string(from: date)
+    }
     
     private func dateCard(_ title: String, _ date: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -1339,8 +1373,6 @@ struct trackLocationSheet: View {
     
     private func loadingView() -> some View {
         VStack(spacing: 16) {
-//            ProgressView()
-//                .scaleEffect(1.2)
             Text("Searching...")
                 .font(.system(size: 16))
                 .foregroundColor(.gray)
@@ -1380,7 +1412,7 @@ struct trackLocationSheet: View {
 // MARK: - Convenience Initializers
 extension trackLocationSheet {
     
-    // Convenience initializer for preview
+    // UPDATED: Convenience initializer for preview with calendar callback
     init(forPreview: Bool = true) {
         self._isPresented = .constant(true)
         self.source = .trackedTab
@@ -1389,13 +1421,13 @@ extension trackLocationSheet {
         self.onDateSelected = nil
         self.onFlightNumberEntered = nil
         self.onSearchCompleted = nil
+        self.onCustomDateSelected = nil // ADDED: Calendar callback
     }
 }
 
 #Preview {
     trackLocationSheet(forPreview: true)
 }
-
 
 #Preview("Date Selection Only") {
     trackLocationSheet(forPreview: true)
