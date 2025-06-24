@@ -38,13 +38,20 @@ struct TrackedFlightCard: View {
                 Spacer()
                 
                 // Status badge
-                Text(status)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(4)
+                VStack {
+                    Text(status)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.rainForest)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.rainForest, lineWidth: 1)
+                        )
+                        .cornerRadius(6)
+                }
+
+                
             }
             
             // Flight timeline
@@ -69,24 +76,47 @@ struct TrackedFlightCard: View {
                 
                 // Flight path visualization
                 VStack(spacing: 4) {
-                    HStack(spacing: 0) {
-                        Circle()
-                            .fill(Color.gray.opacity(0.4))
-                            .frame(width: 8, height: 8)
+
+                    HStack{
+                        // Departure circle
+                               Circle()
+                                 .stroke(Color.primary, lineWidth: 1)
+                                 .frame(width: 8, height: 8)
+                               
+                               Rectangle()
+                                 .fill(Color.primary)
+                                 .frame(width: 10, height: 1)
+                                 .padding(.top, 4)
+                                 .padding(.bottom, 4)
+                        HStack {
+                            Text(duration)
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                                .padding(.vertical,3)
+                                .padding(.horizontal,4)
+                        }
+                        .frame(width: 60)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.black, lineWidth: 1)
+                        )
+                        
                         
                         Rectangle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(height: 1)
-                        
+                          .fill(Color.primary)
+                          .frame(width: 10, height: 1)
+                          .padding(.top, 4)
+                          .padding(.bottom, 4) 
                         Circle()
-                            .fill(Color.gray.opacity(0.4))
-                            .frame(width: 8, height: 8)
+                          .stroke(Color.primary, lineWidth: 1)
+                          .frame(width: 8, height: 8)
                     }
-                    .frame(width: 100)
                     
-                    Text(duration)
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
+
+                    
+                    
                     
                     Text(flightType)
                         .font(.system(size: 11, weight: .medium))

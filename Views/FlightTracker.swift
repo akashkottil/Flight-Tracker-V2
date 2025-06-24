@@ -654,14 +654,6 @@ struct FlightTrackerScreen: View {
     
     private var recentlyViewedFlightsListView: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Recently Viewed")
-                    .font(.system(size: 18, weight: .semibold))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                Spacer()
-            }
             
             ScrollView {
                 LazyVStack(spacing: 16) {
