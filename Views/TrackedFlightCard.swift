@@ -93,9 +93,9 @@ struct TrackedFlightCard: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(.gray)
                                 .padding(.vertical,3)
-                                .padding(.horizontal,4)
+//                                .padding(.horizontal,4)
                         }
-                        .frame(width: 60)
+                        .frame(width: 70)
                         .background(Color.white)
                         .cornerRadius(8)
                         .overlay(
@@ -163,7 +163,7 @@ struct TrackedFlightCard_Previews: PreviewProvider {
             arrivalTime: "18:30",
             arrivalAirport: "CNN",
             arrivalDate: "10 Apr",
-            duration: "12h 10m",
+            duration: "12h 30m",
             flightType: "Direct"
         )
         .padding()

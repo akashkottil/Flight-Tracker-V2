@@ -1,4 +1,24 @@
 import SwiftUI
+import MapKit
+
+// MARK: - Stretchy Header Extension
+extension View {
+    func estretchy() -> some View {
+        visualEffect { effect, geometry in
+            let currentHeight = geometry.size.height
+            let scrollOffset = geometry.frame(in: .scrollView).minY
+            let positiveOffset = max(0, scrollOffset)
+            
+            let newHeight = currentHeight + positiveOffset
+            let scaleFactor = newHeight / currentHeight
+            
+            return effect.scaleEffect(
+                x: scaleFactor, y: scaleFactor,
+                anchor: .bottom
+            )
+        }
+    }
+}
 
 struct FlightDetailScreen: View {
     @Environment(\.presentationMode) var presentationMode
@@ -13,9 +33,18 @@ struct FlightDetailScreen: View {
     @State private var isLoading = true
     @State private var error: String?
     
+    // Map-related state
+    @State private var mapRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 20.0, longitude: 60.0),
+        span: MKCoordinateSpan(latitudeDelta: 20.0, longitudeDelta: 20.0)
+    )
+    @State private var flightRoute: [CLLocationCoordinate2D] = []
+    @State private var departureAnnotation: FlightAnnotation?
+    @State private var arrivalAnnotation: FlightAnnotation?
+    
     private let networkManager = FlightTrackNetworkManager.shared
 
-    // ADDED: Default initializer for backward compatibility
+    // Default initializer for backward compatibility
     init(flightNumber: String, date: String, onFlightViewed: ((TrackedFlightData) -> Void)? = nil) {
         self.flightNumber = flightNumber
         self.date = date
@@ -24,17 +53,83 @@ struct FlightDetailScreen: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 16) {
-                    if isLoading {
-                        FlightDetailsShimmer()
-                    } else if let error = error {
-                        errorView(error)
-                    } else if let flightDetail = flightDetail {
-                        flightDetailContent(flightDetail)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Stretchy Map Header
+                    if let flightDetail = flightDetail {
+                        Map(coordinateRegion: $mapRegion, annotationItems: [
+                            departureAnnotation,
+                            arrivalAnnotation
+                        ].compactMap { $0 }) { annotation in
+                            MapAnnotation(coordinate: annotation.coordinate) {
+                                VStack(spacing: 4) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(annotation.type == .departure ? Color.green : Color.red)
+                                            .frame(width: 12, height: 12)
+                                        
+                                        Circle()
+                                            .stroke(Color.white, lineWidth: 2)
+                                            .frame(width: 12, height: 12)
+                                    }
+                                    
+                                    Text(annotation.airportCode)
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(annotation.type == .departure ? Color.green : Color.red)
+                                        )
+                                }
+                            }
+                        }
+                        .overlay(
+                            // Flight path polyline
+                            FlightPathView(coordinates: flightRoute)
+                                .allowsHitTesting(false)
+                        )
+                        .frame(height: 350)
+                        .clipped()
+                        .stretchy()
+                        .onAppear {
+                            setupMapData(for: flightDetail)
+                        }
+                    } else {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 350)
+                            .clipped()
+                            .stretchy()
+                            .overlay(
+                                VStack {
+                                    Image(systemName: "map")
+                                        .font(.system(size: 30))
+                                        .foregroundColor(.gray)
+                                    Text("Flight Route")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                            )
                     }
+                    
+                    // Flight Detail Content
+                    VStack(spacing: 16) {
+                        if isLoading {
+                            FlightDetailsShimmer()
+                        } else if let error = error {
+                            errorView(error)
+                        } else if let flightDetail = flightDetail {
+                            flightDetailContent(flightDetail)
+                        }
+                    }
+                    .background(Color(UIColor.systemBackground))
+                    .padding(.horizontal)
+                    .padding(.bottom, 32)
                 }
             }
+            .ignoresSafeArea(edges: .top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color(hex: "0C243E"), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -50,7 +145,7 @@ struct FlightDetailScreen: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
                         if let flightDetail = flightDetail {
-                            Text("\(flightDetail.departure.airport.city ?? flightDetail.departure.airport.name) - \(flightDetail.arrival.airport.city ?? flightDetail.arrival.airport.name)")  // FIXED: Handle optional city
+                            Text("\(flightDetail.departure.airport.city ?? flightDetail.departure.airport.name) - \(flightDetail.arrival.airport.city ?? flightDetail.arrival.airport.name)")
                                 .font(.system(size: 18))
                                 .fontWeight(.bold)
                         } else {
@@ -72,27 +167,76 @@ struct FlightDetailScreen: View {
                     }
                 }
             }
-        }
-        .onAppear {
-            Task {
-                await fetchFlightDetails()
+            .onAppear {
+                Task {
+                    await fetchFlightDetails()
+                }
             }
-        }
-        .onDisappear {
-            // ADDED: Add flight to recently viewed when user leaves this screen
-            if let flightDetail = flightDetail, let onFlightViewed = onFlightViewed {
-                addToRecentlyViewed(flightDetail)
+            .onDisappear {
+                // Add flight to recently viewed when user leaves this screen
+                if let flightDetail = flightDetail, let onFlightViewed = onFlightViewed {
+                    addToRecentlyViewed(flightDetail)
+                }
             }
         }
     }
     
-    // ADDED: Add flight to recently viewed when screen is dismissed
+    // MARK: - Map Setup Methods
+    
+    private func setupMapData(for flight: FlightDetail) {
+        let departureCoordinate = CLLocationCoordinate2D(
+            latitude: flight.departure.airport.location.lat,
+            longitude: flight.departure.airport.location.lng
+        )
+        
+        let arrivalCoordinate = CLLocationCoordinate2D(
+            latitude: flight.arrival.airport.location.lat,
+            longitude: flight.arrival.airport.location.lng
+        )
+        
+        // Create annotations
+        departureAnnotation = FlightAnnotation(
+            id: "departure",
+            coordinate: departureCoordinate,
+            airportCode: flight.departure.airport.iataCode,
+            type: .departure
+        )
+        
+        arrivalAnnotation = FlightAnnotation(
+            id: "arrival",
+            coordinate: arrivalCoordinate,
+            airportCode: flight.arrival.airport.iataCode,
+            type: .arrival
+        )
+        
+        // Create flight route
+        flightRoute = [departureCoordinate, arrivalCoordinate]
+        
+        // Calculate region to fit both points
+        let centerLat = (departureCoordinate.latitude + arrivalCoordinate.latitude) / 2
+        let centerLng = (departureCoordinate.longitude + arrivalCoordinate.longitude) / 2
+        
+        let latDelta = abs(departureCoordinate.latitude - arrivalCoordinate.latitude) * 1.5
+        let lngDelta = abs(departureCoordinate.longitude - arrivalCoordinate.longitude) * 1.5
+        
+        let region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLng),
+            span: MKCoordinateSpan(
+                latitudeDelta: max(latDelta, 1.0),
+                longitudeDelta: max(lngDelta, 1.0)
+            )
+        )
+        
+        mapRegion = region
+    }
+    
+    // Add flight to recently viewed when screen is dismissed
     private func addToRecentlyViewed(_ flight: FlightDetail) {
         let trackedFlight = TrackedFlightData(
             id: "\(flightNumber)_\(date)",
             flightNumber: flight.flightIata,
             airlineName: flight.airline.name,
-            status: flight.status ?? "Unknown",  // FIXED: Handle optional status
+            status: flight.status ?? "Unknown",
             departureTime: formatTime(flight.departure.scheduled.local),
             departureAirport: flight.departure.airport.iataCode,
             departureDate: formatDateOnly(flight.departure.scheduled.local),
@@ -100,7 +244,7 @@ struct FlightDetailScreen: View {
             arrivalAirport: flight.arrival.airport.iataCode,
             arrivalDate: formatDateOnly(flight.arrival.scheduled.local),
             duration: calculateDuration(departure: flight.departure.scheduled.local, arrival: flight.arrival.scheduled.local),
-            flightType: "Direct", // You might want to determine this based on actual data
+            flightType: "Direct",
             date: date
         )
         
@@ -300,7 +444,7 @@ struct FlightDetailScreen: View {
                 // Status Cards
                 VStack(spacing: 12) {
                     flightStatusCard(
-                        title: "\(flight.departure.airport.city ?? flight.departure.airport.name), \(flight.departure.airport.country ?? "Unknown")",  // FIXED: Handle optional fields
+                        title: "\(flight.departure.airport.city ?? flight.departure.airport.name), \(flight.departure.airport.country ?? "Unknown")",
                         gateTime: formatTime(flight.departure.scheduled.local),
                         estimatedGateTime: flight.departure.estimated?.local != nil ? formatTime(flight.departure.estimated?.local) : nil,
                         gateStatus: flight.departure.actual != nil ? "Departed" : "On time",
@@ -313,7 +457,7 @@ struct FlightDetailScreen: View {
                         .padding(.vertical,20)
                     
                     flightStatusCard(
-                        title: "\(flight.arrival.airport.city ?? flight.arrival.airport.name), \(flight.arrival.airport.country ?? "Unknown")",  // FIXED: Handle optional fields
+                        title: "\(flight.arrival.airport.city ?? flight.arrival.airport.name), \(flight.arrival.airport.country ?? "Unknown")",
                         gateTime: formatTime(flight.arrival.scheduled.local),
                         estimatedGateTime: flight.arrival.estimated?.local != nil ? formatTime(flight.arrival.estimated?.local) : nil,
                         gateStatus: flight.arrival.actual != nil ? "Arrived" : (flight.arrival.estimated != nil ? getArrivalStatus(scheduled: flight.arrival.scheduled.local ?? "", estimated: flight.arrival.estimated?.local ?? "") : "On time"),
@@ -706,6 +850,46 @@ struct FlightDetailScreen: View {
     }
 }
 
+// MARK: - Map Support Models and Views
+
+enum AirportType {
+    case departure
+    case arrival
+}
+
+struct FlightAnnotation: Identifiable {
+    let id: String
+    let coordinate: CLLocationCoordinate2D
+    let airportCode: String
+    let type: AirportType
+}
+
+struct FlightPathView: View {
+    let coordinates: [CLLocationCoordinate2D]
+    
+    var body: some View {
+        if coordinates.count >= 2 {
+            Path { path in
+                let start = coordinates[0]
+                let end = coordinates[1]
+                
+                // Convert coordinates to view space would need proper map projection
+                // For now, we'll use a simple straight line overlay
+                path.move(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: 100, y: 100))
+            }
+            .stroke(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue, Color.purple]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [5, 5])
+            )
+        }
+    }
+}
+
 // MARK: - Supporting Views (keeping original design)
 
 struct AirlinesInfo: View {
@@ -726,7 +910,7 @@ struct AirlinesInfo: View {
             HStack{
                 VStack {
                     Text("ATC Callsign")
-                    Text(airline.callsign ?? "N/A")  // FIXED: Handle optional callsign
+                    Text(airline.callsign ?? "N/A")
                         .fontWeight(.bold)
                 }
                 .padding()
@@ -738,7 +922,7 @@ struct AirlinesInfo: View {
                 
                 VStack {
                     Text("Fleet Size")
-                    Text("\(airline.totalAircrafts ?? 0)")  // FIXED: Handle optional totalAircrafts
+                    Text("\(airline.totalAircrafts ?? 0)")
                         .fontWeight(.bold)
                 }
                 .padding()
@@ -750,7 +934,7 @@ struct AirlinesInfo: View {
                 
                 VStack {
                     Text("Fleet Age")
-                    Text("\(String(format: "%.1f", airline.averageFleetAge ?? 0.0))y")  // FIXED: Handle optional averageFleetAge
+                    Text("\(String(format: "%.1f", airline.averageFleetAge ?? 0.0))y")
                         .fontWeight(.bold)
                 }
                 .padding()
@@ -792,7 +976,7 @@ struct AboutDestination: View {
                     Text("29°C") // You might want to integrate weather API
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("Weather in \(flight.arrival.airport.city ?? flight.arrival.airport.name)")  // FIXED: Handle optional city
+                    Text("Weather in \(flight.arrival.airport.city ?? flight.arrival.airport.name)")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundColor(.white.opacity(0.7))
                 }
