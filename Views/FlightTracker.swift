@@ -615,6 +615,7 @@ struct FlightTrackerScreen: View {
                                         addRecentlyViewedFlight(flight)
                                     }
                                 )) {
+                                    // FIXED: Remove the extra schedule parameter
                                     flightRowContent(scheduleResults[index])
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -954,6 +955,7 @@ struct FlightTrackerScreen: View {
                                 addRecentlyViewedFlight(flight)
                             }
                         )) {
+                            // FIXED: Remove the extra schedule parameter
                             flightRowContent(scheduleResults[index])
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -983,6 +985,7 @@ struct FlightTrackerScreen: View {
                                 addRecentlyViewedFlight(flight)
                             }
                         )) {
+                            // FIXED: Remove the extra schedule parameter
                             flightRowContent(displayingRecentResults[index])
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -1066,7 +1069,12 @@ struct FlightTrackerScreen: View {
     // Create a separate content view for reusability
     private func flightRowContent(_ flight: FlightInfo) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image("FlightTrackLogo")
+            // UPDATED: Use airline IATA code from FlightInfo
+            AirlineLogoView(
+                        iataCode: flight.airlineIataCode ?? flight.flightNumber.airlineIataCode,
+                        fallbackImage: "FlightTrackLogo",
+                        size: 60
+                    )
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(flight.flightNumber)
@@ -1131,7 +1139,6 @@ struct FlightTrackerScreen: View {
         }
         .padding(.vertical, 12)
     }
-    
     private func openTrackLocationSheet(source: SheetSource) {
         // Force state update before showing sheet
         DispatchQueue.main.async {
@@ -1359,6 +1366,7 @@ struct FlightTrackerScreen: View {
             [
                 "flightNumber": flight.flightNumber,
                 "airline": flight.airline,
+                "airlineIataCode": flight.airlineIataCode ?? "", // ADD THIS
                 "destination": flight.destination,
                 "destinationName": flight.destinationName,
                 "time": flight.time,
@@ -1387,7 +1395,10 @@ struct FlightTrackerScreen: View {
                       let time = dict["time"],
                       let scheduledTime = dict["scheduledTime"],
                       let statusString = dict["status"],
-                      let delay = dict["delay"] else { return nil }
+                      let delay = dict["delay"] else {
+                    // FIXED: Return nil instead of nothing
+                    return nil
+                }
                 
                 let status: FlightStatus
                 switch statusString.lowercased() {
@@ -1400,6 +1411,7 @@ struct FlightTrackerScreen: View {
                 return FlightInfo(
                     flightNumber: flightNumber,
                     airline: airline,
+                    airlineIataCode: dict["airlineIataCode"], // ADD THIS - may be nil for old data
                     destination: destination,
                     destinationName: destinationName,
                     time: time,
@@ -1519,6 +1531,7 @@ struct FlightTrackerScreen: View {
         return FlightInfo(
             flightNumber: schedule.flightNumber,
             airline: schedule.airline.name,
+            airlineIataCode: schedule.airline.iataCode, // ADD THIS
             destination: destination,
             destinationName: destinationName,
             time: arrivalTime,
@@ -1571,6 +1584,7 @@ struct TrackedFlightData: Codable, Identifiable {
 struct FlightInfo {
     let flightNumber: String
     let airline: String
+    let airlineIataCode: String? // ADD THIS FIELD
     let destination: String
     let destinationName: String
     let time: String

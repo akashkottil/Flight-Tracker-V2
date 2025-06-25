@@ -14,6 +14,10 @@ struct TrackedFlightCard: View {
     let duration: String
     let flightType: String
     
+    private var airlineIataCode: String? {
+            return flightNumber.airlineIataCode
+        }
+    
     var body: some View {
         VStack(spacing: 16) {
             // Header section
@@ -21,9 +25,14 @@ struct TrackedFlightCard: View {
                 HStack(spacing: 8) {
                     // Airline logo
                     ZStack {
-                        Image("FlightTrackLogo")
-                            .frame(width: 24, height: 24)
-                            .cornerRadius(6)
+//                        Image("FlightTrackLogo")
+//                            .frame(width: 24, height: 24)
+//                            .cornerRadius(6)
+                        AirlineLogoView(
+                                                iataCode: airlineIataCode,
+                                                fallbackImage: "FlightTrackLogo",
+                                                size: 24
+                                            )
                     }
                     
                     Text(airlineName)

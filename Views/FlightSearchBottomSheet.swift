@@ -1150,12 +1150,14 @@ struct trackLocationSheet: View {
     
     private func airlineRowView(_ airline: FlightTrackAirline) -> some View {
         HStack(spacing: 12) {
-            Text(airline.iataCode ?? "??")
-                .font(.system(size: 16, weight: .bold))
-                .padding(8)
-                .frame(width: 50, height: 50)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
+            // UPDATED: Use actual airline logo instead of text
+            AirlineLogoView(
+                iataCode: airline.iataCode,
+                fallbackImage: "FlightTrackLogo",
+                size: 50
+            )
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(8)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(airline.name)

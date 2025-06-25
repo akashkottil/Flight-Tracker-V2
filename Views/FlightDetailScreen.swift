@@ -282,9 +282,14 @@ struct FlightDetailScreen: View {
             // Flight Info Header
             VStack {
                 HStack{
-                    Image("FlightTrackLogo") // Placeholder for airline icon
-                        .resizable()
-                        .frame(width: 34, height: 34)
+//                    Image("FlightTrackLogo") // Placeholder for airline icon
+//                        .resizable()
+//                        .frame(width: 34, height: 34)
+                    AirlineLogoView(
+                        iataCode: flight.airline.iataCode,
+                        fallbackImage: "FlightTrackLogo",
+                        size: 34
+                    )
                     VStack(alignment: .leading, spacing: 4) {
                         Text(flight.flightIata)
                             .font(.headline)
@@ -901,8 +906,11 @@ struct AirlinesInfo: View {
                 .font(.system(size: 18, weight: .semibold))
                 .padding(.top, 15)
             HStack{
-                Image("FlightTrackLogo")
-                    .frame(width: 34, height: 34)
+                AirlineLogoView(
+                    iataCode: airline.iataCode,
+                    fallbackImage: "FlightTrackLogo",
+                    size: 34
+                )
                 Text(airline.name)
                     .font(.system(size: 16, weight: .semibold))
                 Spacer()
