@@ -12,6 +12,9 @@ struct AirlineLogoView: View {
     let fallbackImage: String
     let size: CGFloat
     
+    @State private var loadedImage: UIImage?
+    @State private var isLoading = false
+    
     init(iataCode: String?, fallbackImage: String = "FlightTrackLogo", size: CGFloat = 34) {
         self.iataCode = iataCode
         self.fallbackImage = fallbackImage
@@ -20,23 +23,29 @@ struct AirlineLogoView: View {
     
     var body: some View {
         Group {
-            if let processedIataCode = processIataCode() {
-                // Try to load airline-specific logo
-                if let uiImage = loadAirlineImage(iataCode: processedIataCode) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    // Show fallback with debug info
-                    fallbackImageView(attemptedCode: processedIataCode)
-                }
+            if let image = loadedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else if isLoading {
+                ProgressView()
+                    .frame(width: size/2, height: size/2)
             } else {
-                // No valid IATA code, use fallback
-                fallbackImageView(attemptedCode: nil)
+                Image(fallbackImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
             }
         }
         .frame(width: size, height: size)
         .cornerRadius(6)
+        .onAppear {
+            loadImageOptimized()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .memoryPressure)) { _ in
+            if loadedImage != nil {
+                loadedImage = nil
+            }
+        }
     }
     
     // ✅ ENHANCED: Better IATA code processing
@@ -183,6 +192,72 @@ struct AirlineLogoView: View {
             }
         }
     }
+    
+    private func loadImageOptimized() {
+        guard let processedCode = processIataCode(),
+              loadedImage == nil else { return }
+        
+        // Check cache first
+        if let cachedImage = ImageCache.shared.image(forKey: processedCode) {
+            loadedImage = cachedImage
+            return
+        }
+        
+        isLoading = true
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            if let image = loadAirlineImageSync(iataCode: processedCode) {
+                let optimizedImage = optimizeImageForDisplay(image, targetSize: CGSize(width: size * 2, height: size * 2))
+                ImageCache.shared.setImage(optimizedImage, forKey: processedCode)
+                
+                DispatchQueue.main.async {
+                    self.loadedImage = optimizedImage
+                    self.isLoading = false
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+
+    private func loadAirlineImageSync(iataCode: String) -> UIImage? {
+        print("🔍 AirlineLogoView: Attempting to load image for: '\(iataCode)'")
+        
+        // Strategy 1: Load from Resource folder with directory path
+        if let path = Bundle.main.path(forResource: iataCode, ofType: "png", inDirectory: "Resource/airlinesicons"),
+           let uiImage = UIImage(contentsOfFile: path) {
+            print("✅ Loaded '\(iataCode).png' from Resource/airlinesicons folder")
+            return uiImage
+        }
+        
+        // Strategy 2: Load directly from main bundle
+        if let uiImage = UIImage(named: iataCode) {
+            print("✅ Loaded '\(iataCode).png' from main bundle")
+            return uiImage
+        }
+        
+        // Strategy 3: Try different file extensions
+        for ext in ["png", "PNG", "jpg", "jpeg"] {
+            if let path = Bundle.main.path(forResource: iataCode, ofType: ext, inDirectory: "Resource/airlinesicons"),
+               let uiImage = UIImage(contentsOfFile: path) {
+                print("✅ Loaded '\(iataCode).\(ext)' from Resource folder")
+                return uiImage
+            }
+        }
+        
+        print("❌ Failed to load any image for IATA code: '\(iataCode)'")
+        return nil
+    }
+
+    private func optimizeImageForDisplay(_ image: UIImage, targetSize: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+    
 }
 
 // ✅ ENHANCED: Better extension for flight number parsing

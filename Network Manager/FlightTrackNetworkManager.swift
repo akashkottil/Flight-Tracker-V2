@@ -6,9 +6,25 @@ class FlightTrackNetworkManager {
     private let baseURL = "https://staging.flight.lascade.com/api"
     private let authorization = "TheAllPowerfulKingOf7SeasAnd5LandsAkbarTheGreatCommandsTheAPIToWork"
     
+    // ADD: Request management
+    private var activeRequests: [String: URLSessionDataTask] = [:]
+    private let requestQueue = DispatchQueue(label: "networkQueue", qos: .userInitiated)
+    
     private init() {}
     
     func searchAirports(query: String) async throws -> FlightTrackAirportResponse {
+        let cacheKey = "airports_\(query.lowercased())"
+        
+        // Cancel previous request for same query
+        activeRequests[cacheKey]?.cancel()
+        
+        // Check cache first
+        if let cachedData = APICache.shared.getCachedResponse(for: cacheKey),
+           let response = try? JSONDecoder().decode(FlightTrackAirportResponse.self, from: cachedData) {
+            print("📋 Using cached airport results for: \(query)")
+            return response
+        }
+        
         guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "\(baseURL)/v1/airports/?search=\(encodedQuery)") else {
             throw FlightTrackNetworkError.invalidURL
@@ -21,6 +37,7 @@ class FlightTrackNetworkManager {
         request.addValue(authorization, forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await URLSession.shared.data(for: request)
+        activeRequests.removeValue(forKey: cacheKey)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw FlightTrackNetworkError.invalidResponse
@@ -28,8 +45,6 @@ class FlightTrackNetworkManager {
         
         guard 200...299 ~= httpResponse.statusCode else {
             print("Airport search failed with status: \(httpResponse.statusCode)")
-            
-            // ENHANCED: Provide user-friendly error messages for airport searches
             switch httpResponse.statusCode {
             case 400:
                 throw FlightTrackNetworkError.badRequest("Invalid search query. Please try a different airport name or code.")
@@ -45,6 +60,10 @@ class FlightTrackNetworkManager {
         do {
             let airportResponse = try JSONDecoder().decode(FlightTrackAirportResponse.self, from: data)
             print("Successfully decoded \(airportResponse.results.count) airports")
+            
+            // Cache the response for 1 hour
+            APICache.shared.cacheResponse(data, for: cacheKey, ttl: 3600)
+            
             return airportResponse
         } catch {
             print("Airport decoding error: \(error)")
@@ -366,6 +385,11 @@ class FlightTrackNetworkManager {
         }
         
         print(separator + "\n")
+    }
+    
+    func cancelAllRequests() {
+        activeRequests.values.forEach { $0.cancel() }
+        activeRequests.removeAll()
     }
 }
 
