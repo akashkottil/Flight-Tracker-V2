@@ -42,6 +42,9 @@ struct FlightDetailScreen: View {
     @State private var departureAnnotation: FlightAnnotation?
     @State private var arrivalAnnotation: FlightAnnotation?
     
+    // ADDED: Flight progress for animated path
+    @State private var flightProgress: FlightProgress?
+    
     private let networkManager = FlightTrackNetworkManager.shared
 
     // Default initializer for backward compatibility
@@ -55,7 +58,7 @@ struct FlightDetailScreen: View {
         NavigationView {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Stretchy Map Header
+                    // UPDATED: Enhanced Stretchy Map Header with Animated Flight Path
                     if let flightDetail = flightDetail {
                         Map(coordinateRegion: $mapRegion, annotationItems: [
                             departureAnnotation,
@@ -86,13 +89,20 @@ struct FlightDetailScreen: View {
                             }
                         }
                         .overlay(
-                            // Flight path polyline
-                            FlightPathView(coordinates: flightRoute)
-                                .allowsHitTesting(false)
+                            // ADDED: Enhanced flight path with animation
+                            Group {
+                                if let flightProgress = flightProgress {
+                                    AnimatedFlightPathView(
+                                        flightProgress: flightProgress,
+                                        mapRegion: mapRegion
+                                    )
+                                    .allowsHitTesting(false)
+                                }
+                            }
                         )
                         .frame(height: 350)
                         .clipped()
-                        .stretchy()
+                        .estretchy()
                         .onAppear {
                             setupMapData(for: flightDetail)
                         }
@@ -101,7 +111,7 @@ struct FlightDetailScreen: View {
                             .fill(Color.gray.opacity(0.2))
                             .frame(height: 350)
                             .clipped()
-                            .stretchy()
+                            .estretchy()
                             .overlay(
                                 VStack {
                                     Image(systemName: "map")
@@ -181,7 +191,7 @@ struct FlightDetailScreen: View {
         }
     }
     
-    // MARK: - Map Setup Methods
+    // MARK: - UPDATED Map Setup Methods
     
     private func setupMapData(for flight: FlightDetail) {
         let departureCoordinate = CLLocationCoordinate2D(
@@ -208,6 +218,9 @@ struct FlightDetailScreen: View {
             airportCode: flight.arrival.airport.iataCode,
             type: .arrival
         )
+        
+        // ADDED: Calculate flight progress for animated path
+        flightProgress = FlightProgressCalculator.calculateProgress(from: flight)
         
         // Create flight route
         flightRoute = [departureCoordinate, arrivalCoordinate]
@@ -282,9 +295,6 @@ struct FlightDetailScreen: View {
             // Flight Info Header
             VStack {
                 HStack{
-//                    Image("FlightTrackLogo") // Placeholder for airline icon
-//                        .resizable()
-//                        .frame(width: 34, height: 34)
                     AirlineLogoView(
                         iataCode: flight.airline.iataCode,
                         fallbackImage: "FlightTrackLogo",

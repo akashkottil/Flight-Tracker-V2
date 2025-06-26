@@ -125,7 +125,8 @@ struct TrackedDetailsScreen: View {
                                     departure: scheduleResults[index].departureTime,
                                     arrival: scheduleResults[index].arrivalTime
                                 ),
-                                flightType: "Direct"
+                                flightType: "Direct",
+                                airlineIataCode: scheduleResults[index].airline.iataCode // ✅ Use IATA code from API response
                             )
                             .opacity(cardsAppeared ? 1 : 0)
                             .offset(y: cardsAppeared ? 0 : 30)

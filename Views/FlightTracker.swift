@@ -655,7 +655,6 @@ struct FlightTrackerScreen: View {
     
     private var recentlyViewedFlightsListView: some View {
         VStack(spacing: 0) {
-            
             ScrollView {
                 LazyVStack(spacing: 16) {
                     ForEach(recentlyViewedFlights) { flight in
@@ -679,6 +678,7 @@ struct FlightTrackerScreen: View {
                                 arrivalDate: flight.arrivalDate,
                                 duration: flight.duration,
                                 flightType: flight.flightType
+                                // ✅ REMOVED: airlineIataCode parameter
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -1073,7 +1073,7 @@ struct FlightTrackerScreen: View {
             AirlineLogoView(
                         iataCode: flight.airlineIataCode ?? flight.flightNumber.airlineIataCode,
                         fallbackImage: "FlightTrackLogo",
-                        size: 60
+                        size: 24
                     )
             
             VStack(alignment: .leading, spacing: 2) {

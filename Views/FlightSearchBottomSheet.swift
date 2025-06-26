@@ -1152,10 +1152,10 @@ struct trackLocationSheet: View {
         HStack(spacing: 12) {
             // UPDATED: Use actual airline logo instead of text
             AirlineLogoView(
-                iataCode: airline.iataCode,
-                fallbackImage: "FlightTrackLogo",
-                size: 50
-            )
+                        iataCode: airline.iataCode, // Use API response IATA code
+                        fallbackImage: "FlightTrackLogo",
+                        size: 50
+                    )
             .background(Color.green.opacity(0.1))
             .cornerRadius(8)
             
