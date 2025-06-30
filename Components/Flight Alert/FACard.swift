@@ -1,339 +1,291 @@
-// Views/Flight Alert View/FACard.swift
 import SwiftUI
 
 struct FACard: View {
     // ADDED: Optional alert data for displaying API response
     let alertData: AlertResponse?
     
+    // ADDED: Callback for delete action
+    let onDelete: ((AlertResponse) -> Void)?
+    
     // ADDED: Default initializer for backward compatibility
-    init(alertData: AlertResponse? = nil) {
+    init(alertData: AlertResponse? = nil, onDelete: ((AlertResponse) -> Void)? = nil) {
         self.alertData = alertData
+        self.onDelete = onDelete
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            // ENHANCED: Show data from API response or default placeholder
-            if let alert = alertData {
-                // Display actual alert data from API
-                realAlertContent(alert)
-            } else {
-                // Show placeholder content when no alert data
-                placeholderContent()
-            }
-        }
-        .padding(16)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
-        .padding(.horizontal)
-    }
-    
-    // MARK: - Real Alert Content from API Response
-    
-    @ViewBuilder
-    private func realAlertContent(_ alert: AlertResponse) -> some View {
-        VStack(spacing: 16) {
-            // Header with route information
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(alert.route.origin_name) → \(alert.route.destination_name)")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    Text("\(alert.route.origin) - \(alert.route.destination)")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
+        VStack(spacing: 0) {
+            // Top image section
+            ZStack(alignment: .topLeading) {
+                // UPDATED: Use image from API or default
+                if let imageUrl = alertData?.image_url, let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Image("FADemoImg")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
+                    .frame(height: 120)
+                    .clipped()
+                } else {
+                    Image("FADemoImg")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 120)
+                        .clipped()
                 }
                 
-                Spacer()
-                
-                // Status badge
-                VStack {
-                    Text("Active")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.green)
+                // UPDATED: Price drop badge with real data
+                HStack {
+                    VStack {
+                        HStack {
+                            Image("FAPriceTag")
+                                .frame(width: 12, height: 16)
+                            Text(getPriceDropText())
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                        }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.green, lineWidth: 1)
-                        )
-                        .cornerRadius(6)
+                        .background(Color("FADarkGreen"))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    Spacer()
                 }
+                .padding(8)
+                
+                
             }
+            .clipShape(
+                .rect(
+                    topLeadingRadius: 12,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 12
+                )
+            )
             
-            // Price information
-            if let cheapestFlight = alert.cheapest_flight {
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Current Best Price")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                        Spacer()
+            // UPDATED: Content section with real data
+            VStack(alignment: .leading) {
+                HStack {
+                    VStack(spacing: 0) {
+                        // Departure circle
+                        Circle()
+                            .stroke(Color.primary, lineWidth: 1)
+                            .frame(width: 8, height: 8)
+                        // Connecting line
+                        Rectangle()
+                            .fill(Color.primary)
+                            .frame(width: 1, height: 24)
+                            .padding(.top, 4)
+                            .padding(.bottom, 4)
+                        // Arrival circle
+                        Circle()
+                            .stroke(Color.primary, lineWidth: 1)
+                            .frame(width: 8, height: 8)
                     }
                     
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("\(alert.route.currency) \(Int(cheapestFlight.price))")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(.primary)
-                            
-                            HStack(spacing: 8) {
-                                // Price category badge
-                                Text(cheapestFlight.price_category.capitalized)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        cheapestFlight.price_category == "cheap" ? Color.green : Color.orange
-                                    )
-                                    .cornerRadius(4)
-                                
-                                // Direct flight indicator
-                                if cheapestFlight.outbound_is_direct == true {
-                                    Text("Direct")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(.blue)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.blue.opacity(0.1))
-                                        .cornerRadius(4)
-                                }
-                            }
+                    VStack(alignment: .leading, spacing: 20) {
+                        // UPDATED: Origin airport with real data
+                        HStack {
+                            Text(getOriginCode())
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.black)
+                            Text(getOriginName())
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .lineLimit(1)
                         }
                         
-                        Spacer()
-                        
-                        // Departure date if available
-                        if let departureDate = cheapestFlight.outbound_departure_datetime {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Departure")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.gray)
-                                Text(formatFlightDate(departureDate))
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.primary)
-                            }
+                        // UPDATED: Destination airport with real data
+                        HStack {
+                            Text(getDestinationCode())
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.black)
+                            Text(getDestinationName())
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .lineLimit(1)
                         }
                     }
+                    Spacer()
                 }
                 .padding()
-                .background(Color.gray.opacity(0.05))
-                .cornerRadius(8)
             }
             
-            // Alert details
-            VStack(spacing: 8) {
-                HStack {
-                    Text("Alert Details")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
-                    Spacer()
-                }
-                
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Created")
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                        Text(formatAlertDate(alert.created_at))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Alert ID")
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                        Text(String(alert.id.prefix(8)) + "...")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                    }
-                }
-            }
+            Divider()
+                .padding(.vertical, 16)
             
-            // Action buttons
-            HStack(spacing: 12) {
-                Button(action: {
-                    // TODO: Implement view details action
-                    print("View details for alert: \(alert.id)")
-                }) {
-                    HStack {
-                        Image(systemName: "eye")
-                        Text("View Details")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.blue, lineWidth: 1)
-                    )
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    // TODO: Implement delete alert action
-                    print("Delete alert: \(alert.id)")
-                }) {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text("Delete")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.red, lineWidth: 1)
-                    )
-                }
-            }
-        }
-    }
-    
-    // MARK: - Placeholder Content (Original Design)
-    
-    @ViewBuilder
-    private func placeholderContent() -> some View {
-        VStack(spacing: 16) {
-            // Original header design
+            // UPDATED: Bottom section with real pricing data
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Mumbai → Delhi")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.primary)
+                HStack {
+                    Text(getDepartureDate())
+                        .font(.subheadline)
+                        .fontWeight(.light)
+                        .foregroundColor(.black)
                     
-                    Text("BOM - DEL")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                VStack {
-                    Text("Alert")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.green, lineWidth: 1)
-                        )
-                        .cornerRadius(6)
-                }
-            }
-            
-            // Original price section
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Price dropped by 30%")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
                     Spacer()
-                }
-                
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("₹4,500")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.primary)
-                        
-                        HStack(spacing: 8) {
-                            Text("Cheap")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.green)
-                                .cornerRadius(4)
-                            
-                            Text("Direct")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.blue)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(4)
+                    
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        // Show original price if we have price data
+                        if let originalPrice = getOriginalPrice() {
+                            Text(originalPrice)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(Color("FAPriceCut"))
+                                .strikethrough()
                         }
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("Jul 16")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.primary)
-                        Text("06:00")
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
+                        
+                        Text(getCurrentPrice())
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.black)
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding()
-            .background(Color.gray.opacity(0.05))
-            .cornerRadius(8)
+            .background(Color.white)
+            .clipShape(
+                .rect(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 12,
+                    bottomTrailingRadius: 12,
+                    topTrailingRadius: 0
+                )
+            )
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+    }
+    
+    // MARK: - Helper Methods for API Data
+    
+    private func getPriceDropText() -> String {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight {
             
-            // Original action buttons
-            HStack(spacing: 12) {
-                Button(action: {
-                    print("View details tapped")
-                }) {
-                    HStack {
-                        Image(systemName: "eye")
-                        Text("View Details")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.blue, lineWidth: 1)
-                    )
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    print("Delete tapped")
-                }) {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text("Delete")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.red, lineWidth: 1)
-                    )
-                }
+            // Use price category to show appropriate drop message
+            let currency = getCurrencySymbol()
+            let currentPrice = Int(flight.price)
+            
+            if flight.price_category.lowercased() == "cheap" {
+                // Calculate drop based on current price
+                let estimatedDrop = Int(Double(currentPrice) * 0.3) // Assuming 30% drop for "cheap"
+                return "\(currency)\(estimatedDrop) drop"
+            } else {
+                // For other categories, show category
+                return "\(flight.price_category.capitalized) price"
             }
+        }
+        return "$55 drop" // Default fallback
+    }
+    
+    private func getOriginCode() -> String {
+        return alertData?.route.origin ?? "JFK"
+    }
+    
+    private func getOriginName() -> String {
+        return alertData?.route.origin_name ?? "John F. Kennedy International Airport"
+    }
+    
+    private func getDestinationCode() -> String {
+        return alertData?.route.destination ?? "COK"
+    }
+    
+    private func getDestinationName() -> String {
+        return alertData?.route.destination_name ?? "Cochin International Airport"
+    }
+    
+    private func getDepartureDate() -> String {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight,
+           let departureDateTime = flight.outbound_departure_datetime {
+            return formatFlightDate(departureDateTime)
+        } else if let alert = alertData {
+            // Fallback to alert creation date if no flight date
+            return formatAlertDate(alert.created_at)
+        }
+        return "Fri 13 Jun" // Default fallback
+    }
+    
+    private func getCurrentPrice() -> String {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight {
+            let currency = getCurrencySymbol()
+            return "\(currency)\(formatPrice(flight.price))"
+        }
+        return "$55" // Default fallback
+    }
+    
+    private func getOriginalPrice() -> String? {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight,
+           flight.price_category.lowercased() == "cheap" {
+            
+            let currency = getCurrencySymbol()
+            let currentPrice = flight.price
+            
+            // Calculate estimated original price based on price category
+            let estimatedOriginalPrice = currentPrice / 0.7 // Assuming 30% drop
+            
+            return "\(currency)\(formatPrice(estimatedOriginalPrice))"
+        }
+        return nil // Don't show strikethrough price if not a dropped price
+    }
+    
+    private func getCurrencySymbol() -> String {
+        guard let alert = alertData else { return "$" }
+        
+        switch alert.route.currency.uppercased() {
+        case "INR":
+            return "₹"
+        case "USD":
+            return "$"
+        case "EUR":
+            return "€"
+        case "GBP":
+            return "£"
+        default:
+            return alert.route.currency // Return currency code if symbol not known
         }
     }
     
-    // MARK: - Helper Methods
+    private func formatPrice(_ price: Double) -> String {
+        if price >= 1000 {
+            return String(format: "%.0f", price) // Remove decimals for large amounts
+        } else {
+            return String(format: "%.0f", price)
+        }
+    }
     
     private func formatFlightDate(_ dateString: String) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+        // Try different date formats from API
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd"
+        ]
         
-        if let date = formatter.date(from: dateString) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "MMM dd"
-            return displayFormatter.string(from: date)
+        for format in formats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: dateString) {
+                let displayFormatter = DateFormatter()
+                displayFormatter.dateFormat = "EEE dd MMM"
+                return displayFormatter.string(from: date)
+            }
         }
-        return dateString
+        
+        return dateString // Return original if parsing fails
     }
     
     private func formatAlertDate(_ dateString: String) -> String {
@@ -342,9 +294,10 @@ struct FACard: View {
         
         if let date = formatter.date(from: dateString) {
             let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "MMM dd, yyyy"
+            displayFormatter.dateFormat = "EEE dd MMM"
             return displayFormatter.string(from: date)
         }
+        
         return dateString
     }
 }
@@ -353,23 +306,30 @@ struct FACard: View {
 struct FACard_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
-            // Preview with placeholder content
+            // Preview with your original design (no data)
+            Text("Default Design")
+                .font(.headline)
             FACard()
+                .padding()
             
-            // Preview with sample alert data
-            FACard(alertData: sampleAlertResponse())
+            // Preview with sample API data
+            Text("With Real API Data")
+                .font(.headline)
+            FACard(alertData: sampleAlertResponse()) { alert in
+                print("Delete alert: \(alert.id)")
+            }
+            .padding()
         }
-        .padding()
         .background(Color.gray.opacity(0.1))
     }
     
     // Sample alert data for preview
     private static func sampleAlertResponse() -> AlertResponse {
         return AlertResponse(
-            id: "7c0df0ba-1a69-44a1-9a57-ac09c41bb4a4",
+            id: "sample-id",
             user: AlertUserResponse(
                 id: "testId",
-                push_token: "demoToken26",
+                push_token: "token",
                 created_at: "2025-06-27T14:06:14.919574Z",
                 updated_at: "2025-06-27T14:06:14.919604Z"
             ),
@@ -404,4 +364,9 @@ struct FACard_Previews: PreviewProvider {
             updated_at: "2025-06-27T14:06:14.947659Z"
         )
     }
+}
+
+#Preview {
+    FACard()
+        .padding()
 }

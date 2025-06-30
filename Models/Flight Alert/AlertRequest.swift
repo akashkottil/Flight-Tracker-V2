@@ -5,7 +5,6 @@
 //  Created by Akash Kottil on 30/06/25.
 //
 
-
 // Models/AlertModels.swift
 import Foundation
 
@@ -124,6 +123,14 @@ struct CheapestFlight: Codable {
         case updated_at
         case route
     }
+}
+
+// MARK: - API Response Wrapper (for paginated responses)
+struct FlightAlertsWrapper: Codable {
+    let results: [AlertResponse]
+    let count: Int?
+    let next: String?
+    let previous: String?
 }
 
 // MARK: - Alert Network Error

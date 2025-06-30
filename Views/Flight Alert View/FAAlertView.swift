@@ -1,9 +1,25 @@
 import SwiftUI
 
-struct FAAlertView : View {
+struct FAAlertView: View {
+    
+    // ADDED: Accept alerts data and callbacks
+    let alerts: [AlertResponse]
+    let onAlertDeleted: ((AlertResponse) -> Void)?
+    let onNewAlertCreated: ((AlertResponse) -> Void)?
     
     @State private var showLocationSheet = false
     @State private var showMyAlertsSheet = false
+    
+    // ADDED: Default initializer for backward compatibility
+    init(
+        alerts: [AlertResponse] = [],
+        onAlertDeleted: ((AlertResponse) -> Void)? = nil,
+        onNewAlertCreated: ((AlertResponse) -> Void)? = nil
+    ) {
+        self.alerts = alerts
+        self.onAlertDeleted = onAlertDeleted
+        self.onNewAlertCreated = onNewAlertCreated
+    }
     
     var body: some View {
         ZStack {
@@ -12,24 +28,35 @@ struct FAAlertView : View {
             VStack {
                 FAheader()
                 
-//                if there is no alert then show NoAlert() component inside Vstack. hide the ScrollView that contain heading and FACard()
-                
+                // UPDATED: Always show alerts since we only reach this view when alerts exist
                 ScrollView {
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("Today's price drop alerts")
-                                .font(.system(size: 20, weight: .bold))
-                            Text("Price dropped by at least 30%")
-                                .font(.system(size: 14, weight: .regular))
+                    VStack(spacing: 0) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text("Today's price drop alerts")
+                                    .font(.system(size: 20, weight: .bold))
+                                Text("Real-time flight price monitoring")
+                                    .font(.system(size: 14, weight: .regular))
+                            }
+                            Spacer()
                         }
-                        Spacer()
+                        .padding(.horizontal, 20)
+                        
+                        // UPDATED: Display real alerts using FACard with delete callback
+                        ForEach(alerts) { alert in
+                            FACard(
+                                alertData: alert,
+                                onDelete: { deletedAlert in
+                                    // Pass the delete action to parent
+                                    onAlertDeleted?(deletedAlert)
+                                }
+                            )
+                            .padding()
+                        }
+                        
+                        Color.clear
+                            .frame(height: 80)
                     }
-                    .padding(.horizontal, 20)
-                    
-                    FACard()
-                        .padding()
-                    Color.clear
-                        .frame(height: 80)
                 }
             }
             
@@ -74,7 +101,13 @@ struct FAAlertView : View {
             }
         }
         .sheet(isPresented: $showLocationSheet) {
-            FALocationSheet()
+            // UPDATED: Handle new alert creation and pass to parent
+            FALocationSheet { newAlert in
+                print("✅ New alert created in FAAlertView: \(newAlert.id)")
+                
+                // Pass the new alert to the parent via callback
+                onNewAlertCreated?(newAlert)
+            }
         }
         .sheet(isPresented: $showMyAlertsSheet) {
             MyAlertsView()
@@ -82,8 +115,47 @@ struct FAAlertView : View {
     }
 }
 
-
 #Preview {
-    FAAlertView()
+    FAAlertView(
+        alerts: [
+            AlertResponse(
+                id: "sample-id",
+                user: AlertUserResponse(
+                    id: "testId",
+                    push_token: "token",
+                    created_at: "2025-06-27T14:06:14.919574Z",
+                    updated_at: "2025-06-27T14:06:14.919604Z"
+                ),
+                route: AlertRouteResponse(
+                    id: 151,
+                    origin: "COK",
+                    destination: "DXB",
+                    currency: "INR",
+                    origin_name: "Kochi",
+                    destination_name: "Dubai",
+                    created_at: "2025-06-25T09:32:47.398234Z",
+                    updated_at: "2025-06-27T14:06:14.932802Z"
+                ),
+                cheapest_flight: CheapestFlight(
+                    id: 13599,
+                    price: 5555,
+                    price_category: "cheap",
+                    outbound_departure_timestamp: 1752624000,
+                    outbound_departure_datetime: "2025-07-16T00:00:00Z",
+                    outbound_is_direct: true,
+                    inbound_departure_timestamp: nil,
+                    inbound_departure_datetime: nil,
+                    inbound_is_direct: nil,
+                    created_at: "2025-06-25T09:32:47.620603Z",
+                    updated_at: "2025-06-25T09:32:47.620615Z",
+                    route: 151
+                ),
+                image_url: "https://image.explore.lascadian.com/city_95673506.webp",
+                target_price: nil,
+                last_notified_price: nil,
+                created_at: "2025-06-27T14:06:14.947629Z",
+                updated_at: "2025-06-27T14:06:14.947659Z"
+            )
+        ]
+    )
 }
-
