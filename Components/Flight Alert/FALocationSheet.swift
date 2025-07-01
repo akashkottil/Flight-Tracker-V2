@@ -739,3 +739,440 @@ struct FALocationSheet: View {
         print("Alert created: \(alertResponse.id)")
     }
 }
+
+import SwiftUI
+
+// MARK: - 1. Top Bar Section
+struct TopBarSection: View {
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        HStack {
+            Button(action: {
+                dismiss()
+            }) {
+                Image(systemName: "xmark")
+                    .foregroundColor(.black)
+                    .padding(10)
+                    .background(Circle().fill(Color.gray.opacity(0.1)))
+            }
+            Spacer()
+            Text("From Where??")
+                .bold()
+                .font(.title2)
+            Spacer()
+            // Empty view for balance
+            Color.clear.frame(width: 40, height: 40)
+        }
+        .padding()
+    }
+}
+
+// MARK: - 2. Search Field Section
+struct SearchFieldSection: View {
+    @State private var searchText = ""
+    @State private var isSearching = false
+    let placeholder: String
+    let borderColor: Color
+    
+    init(placeholder: String, borderColor: Color = .orange) {
+        self.placeholder = placeholder
+        self.borderColor = borderColor
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                TextField(placeholder, text: $searchText)
+                    .padding()
+                
+                if !searchText.isEmpty {
+                    Button(action: {
+                        searchText = ""
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.trailing)
+                }
+                
+                if isSearching {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .padding(.trailing)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(searchText.isEmpty ? Color.gray.opacity(0.8) : borderColor, lineWidth: 1)
+            )
+            .padding(.horizontal)
+            .padding(.top)
+        }
+    }
+}
+
+// MARK: - 3. Current Location Button Section
+struct CurrentLocationSection: View {
+    var body: some View {
+        Button(action: {
+            print("Use current location tapped")
+        }) {
+            HStack {
+                Image(systemName: "location.fill")
+                    .foregroundColor(.blue)
+                Text("Use Current Location")
+                    .foregroundColor(.blue)
+                    .fontWeight(.medium)
+                Spacer()
+            }
+            .padding()
+            .padding(.vertical, 10)
+        }
+    }
+}
+
+// MARK: - 4. Alert Creation Status Section
+//struct AlertCreationStatusSection: View {
+//    @State private var isCreatingAlert = true
+//    let originCity = "Kochi"
+//    let destinationCity = "Dubai"
+//    
+//    var body: some View {
+//        VStack(spacing: 8) {
+//            HStack {
+//                ProgressView()
+//                    .scaleEffect(0.8)
+//                Text("Creating flight alert...")
+//                    .font(.system(size: 14, weight: .medium))
+//                    .foregroundColor(.blue)
+//            }
+//            
+//            Text("\(originCity) → \(destinationCity)")
+//                .font(.system(size: 12))
+//                .foregroundColor(.gray)
+//        }
+//        .padding()
+//        .background(Color.blue.opacity(0.1))
+//        .cornerRadius(8)
+//        .padding(.horizontal)
+//    }
+//}
+
+// MARK: - 5. Alert Creation Error Section
+struct AlertCreationErrorSection: View {
+    @State private var alertCreationError = "Unable to connect to server. Please check your internet connection."
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundColor(.orange)
+                Text("Alert Creation Failed")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.orange)
+            }
+            
+            Text(alertCreationError)
+                .font(.system(size: 12))
+                .foregroundColor(.orange)
+                .multilineTextAlignment(.center)
+            
+            Button("Try Again") {
+                print("Try again tapped")
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(.blue)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(6)
+        }
+        .padding()
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(8)
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - 6. Location Result Row Section
+struct LocationResultRowSection: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            locationResultRow(
+                iataCode: "COK",
+                cityName: "Kochi",
+                countryName: "India",
+                airportName: "Cochin International Airport"
+            )
+            
+            locationResultRow(
+                iataCode: "DXB",
+                cityName: "Dubai",
+                countryName: "United Arab Emirates",
+                airportName: "Dubai International Airport"
+            )
+            
+            locationResultRow(
+                iataCode: "JFK",
+                cityName: "New York",
+                countryName: "United States",
+                airportName: "John F. Kennedy International Airport"
+            )
+        }
+    }
+    
+    @ViewBuilder
+    private func locationResultRow(
+        iataCode: String,
+        cityName: String,
+        countryName: String,
+        airportName: String
+    ) -> some View {
+        Button(action: {
+            print("Selected: \(iataCode)")
+        }) {
+            VStack(spacing: 0) {
+                HStack(spacing: 15) {
+                    // Airport code badge
+                    Text(iataCode)
+                        .font(.system(size: 14, weight: .medium))
+                        .padding(8)
+                        .frame(width: 44, height: 44)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Main location name
+                        Text("\(cityName), \(countryName)")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                        
+                        // Subtitle with airport name
+                        Text(airportName)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - 7. Search States Section
+//struct SearchStatesSection: View {
+//    var body: some View {
+//        VStack(spacing: 20) {
+//            // Loading State
+//            VStack(spacing: 16) {
+//                ProgressView()
+//                    .scaleEffect(1.2)
+//                Text("Searching airports...")
+//                    .font(.system(size: 14))
+//                    .foregroundColor(.gray)
+//            }
+//            .frame(height: 100)
+//            .background(Color.gray.opacity(0.05))
+//            .cornerRadius(8)
+//            
+//            // Error State
+//            VStack(spacing: 12) {
+//                Image(systemName: "exclamationmark.triangle")
+//                    .font(.system(size: 24))
+//                    .foregroundColor(.orange)
+//                Text("Search Error")
+//                    .font(.system(size: 16, weight: .semibold))
+//                Text("Unable to connect to server")
+//                    .font(.system(size: 14))
+//                    .foregroundColor(.gray)
+//                    .multilineTextAlignment(.center)
+//                    .padding(.horizontal)
+//            }
+//            .frame(height: 120)
+//            .background(Color.orange.opacity(0.05))
+//            .cornerRadius(8)
+//            
+//            // No Results State
+//            VStack(spacing: 12) {
+//                Image(systemName: "magnifyingglass")
+//                    .font(.system(size: 24))
+//                    .foregroundColor(.gray)
+//                Text("No airports found")
+//                    .font(.system(size: 16, weight: .semibold))
+//                Text("Try searching with a different airport name or code")
+//                    .font(.system(size: 14))
+//                    .foregroundColor(.gray)
+//                    .multilineTextAlignment(.center)
+//                    .padding(.horizontal)
+//            }
+//            .frame(height: 120)
+//            .background(Color.gray.opacity(0.05))
+//            .cornerRadius(8)
+//        }
+//        .padding()
+//    }
+//}
+
+// MARK: - 8. Popular Airports Section
+struct PopularAirportsSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Popular Airports")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.gray)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                Spacer()
+            }
+            
+            locationResultRow(
+                iataCode: "COK",
+                cityName: "Kochi",
+                countryName: "India",
+                airportName: "Cochin International Airport"
+            )
+            
+            locationResultRow(
+                iataCode: "DXB",
+                cityName: "Dubai",
+                countryName: "United Arab Emirates",
+                airportName: "Dubai International Airport"
+            )
+            
+            locationResultRow(
+                iataCode: "JFK",
+                cityName: "New York",
+                countryName: "United States",
+                airportName: "John F. Kennedy International Airport"
+            )
+            
+            locationResultRow(
+                iataCode: "LAX",
+                cityName: "Los Angeles",
+                countryName: "United States",
+                airportName: "Los Angeles International Airport"
+            )
+            
+            locationResultRow(
+                iataCode: "LHR",
+                cityName: "London",
+                countryName: "United Kingdom",
+                airportName: "Heathrow Airport"
+            )
+        }
+    }
+    
+    @ViewBuilder
+    private func locationResultRow(
+        iataCode: String,
+        cityName: String,
+        countryName: String,
+        airportName: String
+    ) -> some View {
+        Button(action: {
+            print("Selected popular airport: \(iataCode)")
+        }) {
+            VStack(spacing: 0) {
+                HStack(spacing: 15) {
+                    // Airport code badge
+                    Text(iataCode)
+                        .font(.system(size: 14, weight: .medium))
+                        .padding(8)
+                        .frame(width: 44, height: 44)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Main location name
+                        Text("\(cityName), \(countryName)")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                        
+                        // Subtitle with airport name
+                        Text(airportName)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Previews
+#Preview("1. Top Bar") {
+    TopBarSection()
+        .previewLayout(.sizeThatFits)
+}
+
+#Preview("2. Origin Search Field") {
+    SearchFieldSection(placeholder: "Origin City, Airport or place")
+        .previewLayout(.sizeThatFits)
+}
+
+#Preview("3. Destination Search Field") {
+    SearchFieldSection(placeholder: "Destination City, Airport or place", borderColor: .orange)
+        .previewLayout(.sizeThatFits)
+}
+
+#Preview("4. Current Location Button") {
+    CurrentLocationSection()
+        .previewLayout(.sizeThatFits)
+}
+
+//#Preview("5. Alert Creation Status") {
+//    AlertCreationStatusSection()
+//        .previewLayout(.sizeThatFits)
+//}
+
+#Preview("6. Alert Creation Error") {
+    AlertCreationErrorSection()
+        .previewLayout(.sizeThatFits)
+}
+
+#Preview("7. Location Result Rows") {
+    ScrollView {
+        LocationResultRowSection()
+    }
+    .previewLayout(.fixed(width: 400, height: 300))
+}
+
+//#Preview("8. Search States") {
+//    ScrollView {
+//        SearchStatesSection()
+//    }
+//    .previewLayout(.fixed(width: 400, height: 500))
+//}
+
+#Preview("9. Popular Airports") {
+    ScrollView {
+        PopularAirportsSection()
+    }
+    .previewLayout(.fixed(width: 400, height: 600))
+}
+
+#Preview("10. Complete Flow Demo") {
+    VStack(spacing: 0) {
+        TopBarSection()
+        SearchFieldSection(placeholder: "Origin City, Airport or place")
+        SearchFieldSection(placeholder: "Destination City, Airport or place")
+        CurrentLocationSection()
+        Divider().padding(.horizontal)
+        
+        ScrollView {
+            PopularAirportsSection()
+        }
+    }
+    .background(Color.white)
+}
