@@ -24,34 +24,30 @@ struct AlertScreen: View {
                 FAAlertView(
                     alerts: alerts,
                     onAlertDeleted: { deletedAlert in
-                        // Delete from API and update local state
-                        Task {
-                            await deleteAlert(deletedAlert)
-                        }
+                        // ✅ FIXED: Update local state immediately - no API refetch
+                        handleAlertDeleted(deletedAlert)
                     },
                     onNewAlertCreated: { newAlert in
-                        // Add new alert to local state (already created via API)
-                        alerts.append(newAlert)
-                        saveAlertsToCache() // Cache for offline viewing
-                        print("✅ New alert added from FAAlertView: \(newAlert.id)")
+                        // ✅ FIXED: Add new alert to local state immediately
+                        handleNewAlertCreated(newAlert)
                     }
                 )
             } else {
                 // Show create view when no alerts exist
                 FACreateView(
                     onAlertCreated: { alertResponse in
-                        // Add newly created alert to state
-                        alerts.append(alertResponse)
-                        saveAlertsToCache() // Cache for offline viewing
-                        print("✅ Alert created and state updated - switching to FAAlertView")
+                        // ✅ FIXED: Add newly created alert to state
+                        handleNewAlertCreated(alertResponse)
                     }
                 )
             }
         }
         .onAppear {
-            // Fetch alerts from API when app opens
-            Task {
-                await fetchAlertsFromAPI()
+            // Fetch alerts from API when app opens (only if empty)
+            if alerts.isEmpty {
+                Task {
+                    await fetchAlertsFromAPI()
+                }
             }
         }
         .refreshable {
@@ -96,6 +92,40 @@ struct AlertScreen: View {
         .background(GradientColor.BlueWhite.ignoresSafeArea())
     }
     
+    // MARK: - ✅ FIXED: Alert Event Handlers
+    
+    private func handleAlertDeleted(_ deletedAlert: AlertResponse) {
+        print("🗑️ Handling alert deletion: \(deletedAlert.id)")
+        
+        // ✅ IMMEDIATE STATE UPDATE - Remove from local array
+        alerts.removeAll { $0.id == deletedAlert.id }
+        
+        // Update cache for offline viewing
+        saveAlertsToCache()
+        
+        print("✅ Alert removed from local state. Remaining alerts: \(alerts.count)")
+        
+        // ❌ REMOVED: No API refetch here - that was causing the error
+        // The delete API call is already handled in MyAlertsView
+    }
+    
+    private func handleNewAlertCreated(_ newAlert: AlertResponse) {
+        print("➕ Handling new alert creation: \(newAlert.id)")
+        
+        // ✅ IMMEDIATE STATE UPDATE - Add to existing alerts
+        // Check if alert already exists to avoid duplicates
+        if !alerts.contains(where: { $0.id == newAlert.id }) {
+            alerts.append(newAlert)
+            
+            // Update cache for offline viewing
+            saveAlertsToCache()
+            
+            print("✅ New alert added to local state. Total alerts: \(alerts.count)")
+        } else {
+            print("⚠️ Alert already exists in local state: \(newAlert.id)")
+        }
+    }
+    
     // MARK: - API Methods
     
     @MainActor
@@ -123,29 +153,11 @@ struct AlertScreen: View {
         isLoadingAlerts = false
     }
     
-    @MainActor
-    private func deleteAlert(_ alert: AlertResponse) async {
-        do {
-            // Delete from API
-            try await alertNetworkManager.deleteAlert(alertId: alert.id)
-            
-            // Remove from local state
-            alerts.removeAll { $0.id == alert.id }
-            
-            // Update cache
-            saveAlertsToCache()
-            
-            print("✅ Alert deleted successfully: \(alert.id)")
-            
-        } catch {
-            print("❌ Failed to delete alert: \(error)")
-            
-            // Show error to user
-            alertsError = "Failed to delete alert: \(error.localizedDescription)"
-        }
-    }
+    // MARK: - ❌ REMOVED: Delete method (now handled in MyAlertsView)
+    // The delete API call is now handled directly in MyAlertsView, and this view
+    // only updates local state via the callback
     
-    // MARK: - Cache Management (Fallback for offline use)
+    // MARK: - Cache Management (Unchanged)
     
     private func saveAlertsToCache() {
         if let data = try? JSONEncoder().encode(alerts) {

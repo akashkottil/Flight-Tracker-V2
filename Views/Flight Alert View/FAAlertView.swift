@@ -110,7 +110,26 @@ struct FAAlertView: View {
             }
         }
         .sheet(isPresented: $showMyAlertsSheet) {
-            MyAlertsView()
+            // UPDATED: Pass real alert data to MyAlertsView
+            MyAlertsView(
+                alerts: alerts,
+                onAlertDeleted: { deletedAlert in
+                    // Handle alert deletion - pass to parent
+                    onAlertDeleted?(deletedAlert)
+                    
+                    // Close the sheet if no alerts left
+                    if alerts.count <= 1 {
+                        showMyAlertsSheet = false
+                    }
+                },
+                onNewAlertCreated: { newAlert in
+                    // Handle new alert creation - pass to parent
+                    onNewAlertCreated?(newAlert)
+                    
+                    // Close the sheet after creating new alert
+                    showMyAlertsSheet = false
+                }
+            )
         }
     }
 }
@@ -119,7 +138,7 @@ struct FAAlertView: View {
     FAAlertView(
         alerts: [
             AlertResponse(
-                id: "sample-id",
+                id: "sample-id-1",
                 user: AlertUserResponse(
                     id: "testId",
                     push_token: "token",
@@ -155,7 +174,51 @@ struct FAAlertView: View {
                 last_notified_price: nil,
                 created_at: "2025-06-27T14:06:14.947629Z",
                 updated_at: "2025-06-27T14:06:14.947659Z"
+            ),
+            AlertResponse(
+                id: "sample-id-2",
+                user: AlertUserResponse(
+                    id: "testId",
+                    push_token: "token",
+                    created_at: "2025-06-27T14:06:14.919574Z",
+                    updated_at: "2025-06-27T14:06:14.919604Z"
+                ),
+                route: AlertRouteResponse(
+                    id: 152,
+                    origin: "JFK",
+                    destination: "COK",
+                    currency: "USD",
+                    origin_name: "John F. Kennedy International Airport",
+                    destination_name: "Cochin International Airport",
+                    created_at: "2025-06-25T09:32:47.398234Z",
+                    updated_at: "2025-06-27T14:06:14.932802Z"
+                ),
+                cheapest_flight: CheapestFlight(
+                    id: 13600,
+                    price: 799,
+                    price_category: "average",
+                    outbound_departure_timestamp: 1752624000,
+                    outbound_departure_datetime: "2025-07-20T00:00:00Z",
+                    outbound_is_direct: false,
+                    inbound_departure_timestamp: nil,
+                    inbound_departure_datetime: nil,
+                    inbound_is_direct: nil,
+                    created_at: "2025-06-25T09:32:47.620603Z",
+                    updated_at: "2025-06-25T09:32:47.620615Z",
+                    route: 152
+                ),
+                image_url: "https://image.explore.lascadian.com/city_95673507.webp",
+                target_price: nil,
+                last_notified_price: nil,
+                created_at: "2025-06-27T14:06:14.947629Z",
+                updated_at: "2025-06-27T14:06:14.947659Z"
             )
-        ]
+        ],
+        onAlertDeleted: { alert in
+            print("Alert deleted: \(alert.id)")
+        },
+        onNewAlertCreated: { alert in
+            print("New alert created: \(alert.id)")
+        }
     )
 }

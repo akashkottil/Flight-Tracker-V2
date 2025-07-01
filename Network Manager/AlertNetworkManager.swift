@@ -296,8 +296,9 @@ class AlertNetworkManager {
         }
     }
     
-    // MARK: - Delete Alert
+    // MARK: - Delete Alert Methods
     
+    // ENHANCED: Delete method with user context
     func deleteAlert(alertId: String) async throws {
         guard let url = URL(string: "\(baseURL)/api/alerts/\(alertId)/") else {
             print("❌ Invalid URL: \(baseURL)/api/alerts/\(alertId)/")
@@ -310,16 +311,42 @@ class AlertNetworkManager {
         request.addValue(csrfToken, forHTTPHeaderField: "X-CSRFToken")
         
         print("🗑️ Deleting alert: \(alertId)")
+        print("🌐 DELETE URL: \(url)")
+        print("🔑 CSRF Token: \(csrfToken)")
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw AlertNetworkError.invalidResponse
             }
             
-            guard 200...299 ~= httpResponse.statusCode else {
-                throw AlertNetworkError.serverError("Delete failed with status \(httpResponse.statusCode)")
+            print("📡 Delete Response Status: \(httpResponse.statusCode)")
+            
+            // Log response body for debugging
+            if let responseString = String(data: data, encoding: .utf8), !responseString.isEmpty {
+                print("📄 Delete Response Body: \(responseString)")
+            }
+            
+            if httpResponse.statusCode == 404 {
+                // Specific handling for 404 - alert might not exist or wrong endpoint
+                let errorMessage = "Alert not found. It may have been already deleted or doesn't belong to this user."
+                print("❌ 404 Error: \(errorMessage)")
+                throw AlertNetworkError.serverError(errorMessage)
+            } else if httpResponse.statusCode == 403 {
+                // Forbidden - might need user-specific endpoint
+                let errorMessage = "Access denied. You may not have permission to delete this alert."
+                print("❌ 403 Error: \(errorMessage)")
+                throw AlertNetworkError.serverError(errorMessage)
+            } else if !(200...299 ~= httpResponse.statusCode) {
+                let errorMessage = "Delete failed with status \(httpResponse.statusCode)"
+                print("❌ Delete Error: \(errorMessage)")
+                
+                if let responseString = String(data: data, encoding: .utf8), !responseString.isEmpty {
+                    throw AlertNetworkError.serverError("Delete Error (\(httpResponse.statusCode)): \(responseString)")
+                } else {
+                    throw AlertNetworkError.serverError(errorMessage)
+                }
             }
             
             print("✅ Alert deleted successfully: \(alertId)")
@@ -328,6 +355,177 @@ class AlertNetworkManager {
             print("❌ Delete alert error: \(error)")
             throw error
         }
+    }
+    
+    // NEW: Delete with explicit user context in request body
+    func deleteAlertWithUserContext(alertId: String) async throws {
+        guard let url = URL(string: "\(baseURL)/api/alerts/\(alertId)/") else {
+            print("❌ Invalid URL: \(baseURL)/api/alerts/\(alertId)/")
+            throw AlertNetworkError.invalidURL
+        }
+        
+        // Add user context to request body
+        let deleteRequest = [
+            "user_id": userId,
+            "alert_id": alertId
+        ]
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.addValue("application/json", forHTTPHeaderField: "accept")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue(csrfToken, forHTTPHeaderField: "X-CSRFToken")
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: deleteRequest)
+            request.httpBody = jsonData
+            
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("🗑️ Delete request body: \(jsonString)")
+            }
+        } catch {
+            throw AlertNetworkError.decodingError(error)
+        }
+        
+        print("🗑️ Deleting alert with user context: \(alertId)")
+        print("🌐 DELETE URL: \(url)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AlertNetworkError.invalidResponse
+            }
+            
+            print("📡 Delete with context Response Status: \(httpResponse.statusCode)")
+            
+            // Debug response
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Delete with context Response: \(responseString)")
+            }
+            
+            guard 200...299 ~= httpResponse.statusCode else {
+                let errorMessage = "Delete with context failed with status \(httpResponse.statusCode)"
+                print("❌ \(errorMessage)")
+                
+                if let responseString = String(data: data, encoding: .utf8) {
+                    throw AlertNetworkError.serverError("Delete Error (\(httpResponse.statusCode)): \(responseString)")
+                } else {
+                    throw AlertNetworkError.serverError(errorMessage)
+                }
+            }
+            
+            print("✅ Alert deleted successfully with user context: \(alertId)")
+            
+        } catch {
+            print("❌ Delete alert with user context error: \(error)")
+            throw error
+        }
+    }
+    
+    // ALTERNATIVE: Try query parameter approach
+    func deleteAlertWithUserQuery(alertId: String) async throws {
+        guard let url = URL(string: "\(baseURL)/api/alerts/\(alertId)/?user_id=\(userId)") else {
+            print("❌ Invalid URL: \(baseURL)/api/alerts/\(alertId)/?user_id=\(userId)")
+            throw AlertNetworkError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.addValue("application/json", forHTTPHeaderField: "accept")
+        request.addValue(csrfToken, forHTTPHeaderField: "X-CSRFToken")
+        
+        print("🗑️ Deleting alert with user query: \(alertId)")
+        print("🌐 DELETE URL: \(url)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AlertNetworkError.invalidResponse
+            }
+            
+            print("📡 Delete with query Response Status: \(httpResponse.statusCode)")
+            
+            // Debug response
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Delete with query Response: \(responseString)")
+            }
+            
+            guard 200...299 ~= httpResponse.statusCode else {
+                let errorMessage = "Delete with query failed with status \(httpResponse.statusCode)"
+                print("❌ \(errorMessage)")
+                
+                if let responseString = String(data: data, encoding: .utf8) {
+                    throw AlertNetworkError.serverError("Delete Error (\(httpResponse.statusCode)): \(responseString)")
+                } else {
+                    throw AlertNetworkError.serverError(errorMessage)
+                }
+            }
+            
+            print("✅ Alert deleted successfully with user query: \(alertId)")
+            
+        } catch {
+            print("❌ Delete alert with user query error: \(error)")
+            throw error
+        }
+    }
+    
+    // ENHANCED: Smart delete method that tries multiple approaches
+    func deleteAlertSmart(alertId: String) async throws {
+        print("🤖 Attempting smart delete for alert: \(alertId)")
+        
+        // First, let's verify the alert exists by fetching current alerts
+        do {
+            let currentAlerts = try await fetchAlerts()
+            let alertExists = currentAlerts.contains { $0.id == alertId }
+            
+            if !alertExists {
+                print("⚠️ Alert \(alertId) not found in current alerts list")
+                print("📋 Available alerts: \(currentAlerts.map { $0.id })")
+                throw AlertNetworkError.serverError("Alert not found in your alerts list. It may have been deleted already.")
+            } else {
+                print("✅ Alert \(alertId) confirmed to exist in fetched alerts")
+                // Show which user the alert belongs to
+                if let alert = currentAlerts.first(where: { $0.id == alertId }) {
+                    print("👤 Alert belongs to user: \(alert.user.id)")
+                    print("🛫 Alert route: \(alert.route.origin) → \(alert.route.destination)")
+                }
+            }
+        } catch {
+            print("⚠️ Could not verify alert existence: \(error)")
+        }
+        
+        // Strategy 1: Try with user query parameter
+        do {
+            try await deleteAlertWithUserQuery(alertId: alertId)
+            print("✅ Successfully deleted via user query parameter")
+            return
+        } catch {
+            print("⚠️ User query parameter delete failed: \(error)")
+        }
+        
+        // Strategy 2: Try with user context in request body
+        do {
+            try await deleteAlertWithUserContext(alertId: alertId)
+            print("✅ Successfully deleted via user context in body")
+            return
+        } catch {
+            print("⚠️ User context delete failed: \(error)")
+        }
+        
+        // Strategy 3: Try the standard REST endpoint
+        do {
+            try await deleteAlert(alertId: alertId)
+            print("✅ Successfully deleted via standard endpoint")
+            return
+        } catch {
+            print("⚠️ Standard endpoint delete failed: \(error)")
+        }
+        
+        // If all strategies fail
+        print("❌ All delete strategies failed")
+        throw AlertNetworkError.serverError("Unable to delete alert. This might be a permission issue or the alert may belong to a different user.")
     }
     
     // Helper method for testing the API connection
