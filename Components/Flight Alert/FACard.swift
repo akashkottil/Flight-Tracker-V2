@@ -24,7 +24,7 @@ struct FACard: View {
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                     } placeholder: {
-                        Image("FADemoImg")
+                        Image("")
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                     }

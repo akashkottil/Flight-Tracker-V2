@@ -1,65 +1,71 @@
 import SwiftUI
 
 struct AlertScreen: View {
-    // UPDATED: State to track alerts and loading
+    // UPDATED: Better state management for tab switching
     @State private var alerts: [AlertResponse] = []
-    @State private var isLoadingAlerts = false
+    @State private var isInitialLoading = false      // Only for first time loading
+    @State private var isRefreshing = false          // Only for pull-to-refresh
     @State private var alertsError: String?
+    @State private var hasEverLoaded = false         // Has data been loaded at least once
+    @State private var showAddButton = false        // Controls animated button
     
     // Network manager
     private let alertNetworkManager = AlertNetworkManager.shared
     
-    // Computed property to determine which view to show
+    // UPDATED: Clear logic for when to show what
+    private var shouldShowShimmerCards: Bool {
+        return isRefreshing && !alerts.isEmpty  // Only during manual refresh
+    }
+    
+    private var shouldShowFullScreenLoading: Bool {
+        return isInitialLoading && alerts.isEmpty && !hasEverLoaded  // Only first time ever
+    }
+    
     private var hasAlerts: Bool {
-        !alerts.isEmpty
+        return !alerts.isEmpty
     }
     
     var body: some View {
         Group {
-            if isLoadingAlerts {
-                // Show loading state
-                loadingView
-            } else if hasAlerts {
-                // Show alerts view with real API data
+            if shouldShowFullScreenLoading {
+                // Show full-screen loading ONLY on very first load
+                fullScreenLoadingView
+            } else if hasAlerts || shouldShowShimmerCards {
+                // Show alerts view (either real cards or shimmer during refresh)
                 FAAlertView(
                     alerts: alerts,
+                    isLoadingShimmer: shouldShowShimmerCards,
+                    showAddButton: showAddButton,
                     onAlertDeleted: { deletedAlert in
-                        // ✅ FIXED: Update local state immediately - no API refetch
                         handleAlertDeleted(deletedAlert)
                     },
                     onNewAlertCreated: { newAlert in
-                        // ✅ FIXED: Add new alert to local state immediately
                         handleNewAlertCreated(newAlert)
                     }
                 )
             } else {
-                // Show create view when no alerts exist
+                // Show create view when no alerts exist and not loading
                 FACreateView(
                     onAlertCreated: { alertResponse in
-                        // ✅ FIXED: Add newly created alert to state
                         handleNewAlertCreated(alertResponse)
                     }
                 )
             }
         }
         .onAppear {
-            // Fetch alerts from API when app opens (only if empty)
-            if alerts.isEmpty {
-                Task {
-                    await fetchAlertsFromAPI()
-                }
-            }
+            // FIXED: Proper tab switch handling
+            handleTabAppear()
         }
         .refreshable {
-            // Pull to refresh functionality
+            // Manual refresh - show shimmer
             Task {
-                await fetchAlertsFromAPI()
+                await performManualRefresh()
             }
         }
         .alert("Error Loading Alerts", isPresented: .constant(alertsError != nil)) {
             Button("Retry") {
                 Task {
-                    await fetchAlertsFromAPI()
+                    await performInitialLoad()
                 }
             }
             Button("Cancel") {
@@ -74,7 +80,7 @@ struct AlertScreen: View {
     
     // MARK: - Loading View
     
-    private var loadingView: some View {
+    private var fullScreenLoadingView: some View {
         VStack(spacing: 20) {
             Spacer()
             
@@ -92,89 +98,172 @@ struct AlertScreen: View {
         .background(GradientColor.BlueWhite.ignoresSafeArea())
     }
     
-    // MARK: - ✅ FIXED: Alert Event Handlers
+    // MARK: - FIXED: Tab Switching Logic
     
-    private func handleAlertDeleted(_ deletedAlert: AlertResponse) {
-        print("🗑️ Handling alert deletion: \(deletedAlert.id)")
+    private func handleTabAppear() {
+        // If we already have alerts in state, do NOTHING
+        if !alerts.isEmpty {
+            print("📱 Tab switch: Already have \(alerts.count) alerts, showing instantly")
+            // Button should already be visible from previous load - no animation needed
+            showAddButton = true
+            return
+        }
         
-        // ✅ IMMEDIATE STATE UPDATE - Remove from local array
-        alerts.removeAll { $0.id == deletedAlert.id }
+        // If we don't have alerts in state, try loading from cache
+        loadFromCacheIfAvailable()
         
-        // Update cache for offline viewing
-        saveAlertsToCache()
-        
-        print("✅ Alert removed from local state. Remaining alerts: \(alerts.count)")
-        
-        // ❌ REMOVED: No API refetch here - that was causing the error
-        // The delete API call is already handled in MyAlertsView
-    }
-    
-    private func handleNewAlertCreated(_ newAlert: AlertResponse) {
-        print("➕ Handling new alert creation: \(newAlert.id)")
-        
-        // ✅ IMMEDIATE STATE UPDATE - Add to existing alerts
-        // Check if alert already exists to avoid duplicates
-        if !alerts.contains(where: { $0.id == newAlert.id }) {
-            alerts.append(newAlert)
-            
-            // Update cache for offline viewing
-            saveAlertsToCache()
-            
-            print("✅ New alert added to local state. Total alerts: \(alerts.count)")
-        } else {
-            print("⚠️ Alert already exists in local state: \(newAlert.id)")
+        // If cache loading didn't work, fetch from API
+        if alerts.isEmpty && !hasEverLoaded {
+            print("📱 First time load: No cache found, fetching from API")
+            Task {
+                await performInitialLoad()
+            }
         }
     }
     
-    // MARK: - API Methods
+    private func loadFromCacheIfAvailable() {
+        guard let data = UserDefaults.standard.data(forKey: "CachedAlerts"),
+              let cachedAlerts = try? JSONDecoder().decode([AlertResponse].self, from: data) else {
+            print("📱 No cached alerts available")
+            return
+        }
+        
+        // Load cached data instantly
+        alerts = cachedAlerts
+        hasEverLoaded = true
+        
+        // Show button immediately for cached data - NO ANIMATION on cache load
+        showAddButton = true
+        
+        print("📱 ✅ Loaded \(alerts.count) alerts from cache instantly - button visible")
+    }
+    
+    // MARK: - API Loading Methods
     
     @MainActor
-    private func fetchAlertsFromAPI() async {
-        isLoadingAlerts = true
+    private func performInitialLoad() async {
+        isInitialLoading = true
+        alertsError = nil
+        showAddButton = false  // Hide button during loading
+        
+        do {
+            let fetchedAlerts = try await alertNetworkManager.fetchAlerts()
+            alerts = fetchedAlerts
+            hasEverLoaded = true
+            
+            // Save to cache
+            saveAlertsToCache()
+            
+            // Show button with animation after loading completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                showAddButtonWithAnimation()
+            }
+            
+            print("✅ Initial load completed: \(fetchedAlerts.count) alerts")
+            
+        } catch {
+            alertsError = error.localizedDescription
+            print("❌ Initial load failed: \(error)")
+        }
+        
+        isInitialLoading = false
+    }
+    
+    @MainActor
+    private func performManualRefresh() async {
+        // Only show shimmer if we have existing alerts
+        if !alerts.isEmpty {
+            isRefreshing = true
+        }
+        
         alertsError = nil
         
         do {
             let fetchedAlerts = try await alertNetworkManager.fetchAlerts()
             alerts = fetchedAlerts
+            hasEverLoaded = true
             
-            // Cache for offline viewing
+            // Save to cache
             saveAlertsToCache()
             
-            print("✅ Successfully fetched \(fetchedAlerts.count) alerts from API")
+            print("✅ Manual refresh completed: \(fetchedAlerts.count) alerts")
             
         } catch {
             alertsError = error.localizedDescription
-            print("❌ Failed to fetch alerts: \(error)")
-            
-            // Fallback to cached alerts if API fails
-            loadAlertsFromCache()
+            print("❌ Manual refresh failed: \(error)")
         }
         
-        isLoadingAlerts = false
+        isRefreshing = false
     }
     
-    // MARK: - ❌ REMOVED: Delete method (now handled in MyAlertsView)
-    // The delete API call is now handled directly in MyAlertsView, and this view
-    // only updates local state via the callback
+    // MARK: - Button Animation
     
-    // MARK: - Cache Management (Unchanged)
+    private func showAddButtonWithAnimation() {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.3)) {
+            showAddButton = true
+        }
+    }
+    
+    private func hideAddButton() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            showAddButton = false
+        }
+    }
+    
+    // MARK: - Alert Event Handlers
+    
+    private func handleAlertDeleted(_ deletedAlert: AlertResponse) {
+        print("🗑️ Handling alert deletion: \(deletedAlert.id)")
+        
+        alerts.removeAll { $0.id == deletedAlert.id }
+        saveAlertsToCache()
+        
+        // Hide button if no alerts left
+        if alerts.isEmpty {
+            hideAddButton()
+        }
+        
+        print("✅ Alert removed. Remaining: \(alerts.count)")
+    }
+    
+    private func handleNewAlertCreated(_ newAlert: AlertResponse) {
+        print("➕ Handling new alert creation: \(newAlert.id)")
+        
+        if !alerts.contains(where: { $0.id == newAlert.id }) {
+            alerts.append(newAlert)
+            saveAlertsToCache()
+            
+            // Show button if not already visible
+            if !showAddButton {
+                showAddButtonWithAnimation()
+            }
+            
+            print("✅ New alert added. Total: \(alerts.count)")
+        }
+    }
+    
+    // MARK: - Cache Management
     
     private func saveAlertsToCache() {
-        if let data = try? JSONEncoder().encode(alerts) {
+        do {
+            let data = try JSONEncoder().encode(alerts)
             UserDefaults.standard.set(data, forKey: "CachedAlerts")
-            print("💾 Cached \(alerts.count) alerts locally")
+            UserDefaults.standard.set(Date(), forKey: "AlertsCacheTimestamp")
+            print("💾 Cached \(alerts.count) alerts")
+        } catch {
+            print("❌ Failed to cache alerts: \(error)")
         }
     }
     
-    private func loadAlertsFromCache() {
-        guard let data = UserDefaults.standard.data(forKey: "CachedAlerts"),
-              let cachedAlerts = try? JSONDecoder().decode([AlertResponse].self, from: data) else {
-            print("📱 No cached alerts found")
-            return
-        }
-        
-        alerts = cachedAlerts
-        print("📱 Loaded \(alerts.count) alerts from cache (offline fallback)")
+    // MARK: - Debug Methods
+    
+    private func clearCache() {
+        UserDefaults.standard.removeObject(forKey: "CachedAlerts")
+        UserDefaults.standard.removeObject(forKey: "AlertsCacheTimestamp")
+        alerts = []
+        hasEverLoaded = false
+        showAddButton = false
+        print("🗑️ Cache cleared")
     }
 }
 
