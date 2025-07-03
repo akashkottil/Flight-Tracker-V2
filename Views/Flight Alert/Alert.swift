@@ -17,7 +17,8 @@ struct AlertScreen: View {
     var body: some View {
         Group {
             if isLoadingAlerts {
-                FAShimmerAlertView()
+                // Show loading state
+                loadingView
             } else if hasAlerts {
                 // Show alerts view with real API data
                 FAAlertView(

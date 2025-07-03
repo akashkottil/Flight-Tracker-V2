@@ -16,17 +16,6 @@ struct FAheader: View {
             }
             
             .padding(.horizontal,10)
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Today's price drop alerts")
-                        .font(.system(size: 20, weight: .bold))
-                    Text("Real-time flight price monitoring")
-                        .font(.system(size: 14, weight: .regular))
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-
         }
     }
 }

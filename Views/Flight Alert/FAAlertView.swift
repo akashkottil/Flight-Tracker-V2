@@ -10,10 +10,6 @@ struct FAAlertView: View {
     @State private var showLocationSheet = false
     @State private var showMyAlertsSheet = false
     
-    // ADDED: Animation states
-    @State private var animatedAlerts: Set<String> = []
-    @State private var hasInitiallyLoaded = false
-    
     // ADDED: Default initializer for backward compatibility
     init(
         alerts: [AlertResponse] = [],
@@ -35,48 +31,36 @@ struct FAAlertView: View {
                 // UPDATED: Always show alerts since we only reach this view when alerts exist
                 ScrollView {
                     VStack(spacing: 0) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text("Today's price drop alerts")
+                                    .font(.system(size: 20, weight: .bold))
+                                Text("Real-time flight price monitoring")
+                                    .font(.system(size: 14, weight: .regular))
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
                         
-                        // UPDATED: Display real alerts using FACard with animations
-                        ForEach(Array(alerts.enumerated()), id: \.element.id) { index, alert in
+                        // UPDATED: Display real alerts using FACard with delete callback
+                        ForEach(alerts) { alert in
                             FACard(
                                 alertData: alert,
                                 onDelete: { deletedAlert in
-                                    // Animate out before deletion
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        animatedAlerts.remove(deletedAlert.id)
-                                    }
-                                    
-                                    // Delay the actual deletion to allow animation
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                        onAlertDeleted?(deletedAlert)
-                                    }
+                                    // Pass the delete action to parent
+                                    onAlertDeleted?(deletedAlert)
                                 }
                             )
                             .padding()
-                            .opacity(animatedAlerts.contains(alert.id) ? 1 : 0)
-                            .offset(y: animatedAlerts.contains(alert.id) ? 0 : 10)
-                            .scaleEffect(animatedAlerts.contains(alert.id) ? 1 : 0.85)
-                            .onAppear {
-                                // Only animate if this card hasn't been animated yet
-                                if !animatedAlerts.contains(alert.id) {
-                                    // Stagger the animation for initial load
-                                    let delay = hasInitiallyLoaded ? 0.1 : Double(index) * 0.15
-                                    
-                                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8, blendDuration: 0).delay(delay)) {
-                                        animatedAlerts.insert(alert.id)
-                                    }
-                                }
-                            }
                         }
                         
                         Color.clear
                             .frame(height: 80)
                     }
                 }
-                .scrollIndicators(.hidden)
             }
             
-            // Fixed bottom button with slide-up animation
+            // Fixed bottom button
             VStack {
                 Spacer()
                 
@@ -114,30 +98,6 @@ struct FAAlertView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
-                .offset(y: hasInitiallyLoaded ? 0 : 100)
-                .opacity(hasInitiallyLoaded ? 1 : 0)
-            }
-        }
-        .onAppear {
-            // Mark as initially loaded after a short delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                hasInitiallyLoaded = true
-                
-                // Animate bottom button
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
-                    // Bottom button animation is handled by the offset/opacity modifiers above
-                }
-            }
-        }
-        .onChange(of: alerts.count) { newCount in
-            // Handle new alerts being added
-            for alert in alerts {
-                if !animatedAlerts.contains(alert.id) {
-                    // New alert detected, animate it in
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                        animatedAlerts.insert(alert.id)
-                    }
-                }
             }
         }
         .sheet(isPresented: $showLocationSheet) {
@@ -171,17 +131,6 @@ struct FAAlertView: View {
                 }
             )
         }
-    }
-}
-
-// MARK: - Animation Extension for smoother transitions
-extension View {
-    func cardAppearAnimation(isVisible: Bool, delay: Double = 0) -> some View {
-        self
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : 30)
-            .scaleEffect(isVisible ? 1 : 0.95)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(delay), value: isVisible)
     }
 }
 

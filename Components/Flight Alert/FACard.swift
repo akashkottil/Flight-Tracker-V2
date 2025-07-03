@@ -13,61 +13,30 @@ struct FACard: View {
         self.onDelete = onDelete
     }
     
-    @State private var shimmerOffset: CGFloat = -300
-    
-    @State private var imageLoaded = false
-
-    
     var body: some View {
-        // Show shimmer if no data, otherwise show real card
-        if let alertData = alertData {
-            realCardContent(for: alertData)
-        } else {
-            shimmerCardContent()
-        }
-    }
-    
-    // MARK: - Real Card Content
-    private func realCardContent(for alert: AlertResponse) -> some View {
         VStack(spacing: 0) {
             // Top image section
             ZStack(alignment: .topLeading) {
                 // UPDATED: Use image from API or default
-                if let imageUrl = alert.image_url, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .empty:
-                            // Placeholder while loading
-                            Color.gray.opacity(0.3)
-                                .frame(height: 120)
-                                .clipped()
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 120)
-                                .clipped()
-                                .opacity(imageLoaded ? 1.0 : 0.0)
-                                .onAppear {
-                                    withAnimation(.easeIn(duration: 0.8)) {
-                                        imageLoaded = true
-                                    }
-                                }
-                        case .failure:
-                            // Optional: fallback if image fails
-                            Color.gray.opacity(0.3)
-                                .frame(height: 120)
-                                .clipped()
-                        @unknown default:
-                            EmptyView()
-                        }
+                if let imageUrl = alertData?.image_url, let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Image("FADemoImg")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
                     }
+                    .frame(height: 120)
+                    .clipped()
                 } else {
-                    Color.gray.opacity(0.3)
+                    Image("FADemoImg")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
                         .frame(height: 120)
                         .clipped()
                 }
-
                 
                 // UPDATED: Price drop badge with real data
                 HStack {
@@ -75,7 +44,7 @@ struct FACard: View {
                         HStack {
                             Image("FAPriceTag")
                                 .frame(width: 12, height: 16)
-                            Text(getPriceDropText(for: alert))
+                            Text(getPriceDropText())
                                 .font(.caption2)
                                 .fontWeight(.medium)
                                 .foregroundColor(.white)
@@ -123,11 +92,11 @@ struct FACard: View {
                     VStack(alignment: .leading, spacing: 20) {
                         // UPDATED: Origin airport with real data
                         HStack {
-                            Text(alert.route.origin)
+                            Text(getOriginCode())
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(.black)
-                            Text(alert.route.origin_name)
+                            Text(getOriginName())
                                 .font(.caption)
                                 .foregroundColor(.gray)
                                 .lineLimit(1)
@@ -135,11 +104,11 @@ struct FACard: View {
                         
                         // UPDATED: Destination airport with real data
                         HStack {
-                            Text(alert.route.destination)
+                            Text(getDestinationCode())
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(.black)
-                            Text(alert.route.destination_name)
+                            Text(getDestinationName())
                                 .font(.caption)
                                 .foregroundColor(.gray)
                                 .lineLimit(1)
@@ -156,7 +125,7 @@ struct FACard: View {
             // UPDATED: Bottom section with real pricing data
             HStack {
                 HStack {
-                    Text(getDepartureDate(for: alert))
+                    Text(getDepartureDate())
                         .font(.subheadline)
                         .fontWeight(.light)
                         .foregroundColor(.black)
@@ -165,7 +134,7 @@ struct FACard: View {
                     
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         // Show original price if we have price data
-                        if let originalPrice = getOriginalPrice(for: alert) {
+                        if let originalPrice = getOriginalPrice() {
                             Text(originalPrice)
                                 .font(.title2)
                                 .fontWeight(.bold)
@@ -173,7 +142,7 @@ struct FACard: View {
                                 .strikethrough()
                         }
                         
-                        Text(getCurrentPrice(for: alert))
+                        Text(getCurrentPrice())
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.black)
@@ -197,235 +166,84 @@ struct FACard: View {
         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
     }
     
-    // MARK: - Shimmer Card Content
-    private func shimmerCardContent() -> some View {
-        VStack(spacing: 0) {
-            // Top image section with shimmer
-            ZStack(alignment: .topLeading) {
-                // Shimmer placeholder for image
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 120)
-                    .overlay(shimmerOverlay())
-                
-                // Price drop badge shimmer
-                HStack {
-                    VStack {
-                        HStack {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.4))
-                                .frame(width: 12, height: 16)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                            
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.4))
-                                .frame(width: 50, height: 12)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.gray.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .overlay(shimmerOverlay())
-                    }
-                    Spacer()
-                }
-                .padding(8)
-            }
-            .clipShape(
-                .rect(
-                    topLeadingRadius: 12,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 12
-                )
-            )
+    // MARK: - Helper Methods for API Data
+    
+    private func getPriceDropText() -> String {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight {
             
-            // Content section with shimmer
-            VStack(alignment: .leading) {
-                HStack {
-                    VStack(spacing: 0) {
-                        // Departure circle
-                        Circle()
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            .frame(width: 8, height: 8)
-                        // Connecting line
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 1, height: 24)
-                            .padding(.top, 4)
-                            .padding(.bottom, 4)
-                        // Arrival circle
-                        Circle()
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            .frame(width: 8, height: 8)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Origin airport shimmer
-                        HStack {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 40, height: 16)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                                .overlay(shimmerOverlay())
-                            
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.25))
-                                .frame(width: 120, height: 12)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                                .overlay(shimmerOverlay())
-                        }
-                        
-                        // Destination airport shimmer
-                        HStack {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 40, height: 16)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                                .overlay(shimmerOverlay())
-                            
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.25))
-                                .frame(width: 140, height: 12)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                                .overlay(shimmerOverlay())
-                        }
-                    }
-                    Spacer()
-                }
-                .padding()
-            }
+            // Use price category to show appropriate drop message
+            let currency = getCurrencySymbol()
+            let currentPrice = Int(flight.price)
             
-            Divider()
-                .padding(.vertical, 16)
-            
-            // Bottom section with pricing shimmer
-            HStack {
-                HStack {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 80, height: 16)
-                        .clipShape(RoundedRectangle(cornerRadius: 2))
-                        .overlay(shimmerOverlay())
-                    
-                    Spacer()
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        // Original price shimmer (strikethrough)
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.25))
-                            .frame(width: 60, height: 20)
-                            .clipShape(RoundedRectangle(cornerRadius: 2))
-                            .overlay(shimmerOverlay())
-                        
-                        // Current price shimmer
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 70, height: 24)
-                            .clipShape(RoundedRectangle(cornerRadius: 2))
-                            .overlay(shimmerOverlay())
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+            if flight.price_category.lowercased() == "cheap" {
+                // Calculate drop based on current price
+                let estimatedDrop = Int(Double(currentPrice) * 0.3) // Assuming 30% drop for "cheap"
+                return "\(currency)\(estimatedDrop) drop"
+            } else {
+                // For other categories, show category
+                return "\(flight.price_category.capitalized) price"
             }
-            .background(Color.white)
-            .clipShape(
-                .rect(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: 12,
-                    bottomTrailingRadius: 12,
-                    topTrailingRadius: 0
-                )
-            )
         }
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-        .onAppear {
-            startShimmerAnimation()
-        }
+        return "$55 drop" // Default fallback
     }
     
-    // MARK: - Shimmer Animation
-    private func shimmerOverlay() -> some View {
-        Rectangle()
-            .fill(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color.clear,
-                        Color.white.opacity(0.6),
-                        Color.clear
-                    ]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .rotationEffect(Angle(degrees: 15))
-            .offset(x: shimmerOffset)
-            .clipped()
+    private func getOriginCode() -> String {
+        return alertData?.route.origin ?? "JFK"
     }
     
-    private func startShimmerAnimation() {
-        withAnimation(
-            Animation
-                .linear(duration: 1.5)
-                .repeatForever(autoreverses: false)
-        ) {
-            shimmerOffset = 300
-        }
+    private func getOriginName() -> String {
+        return alertData?.route.origin_name ?? "John F. Kennedy International Airport"
     }
     
-    // MARK: - Helper Methods for API Data (No Fallbacks)
-    
-    private func getPriceDropText(for alert: AlertResponse) -> String {
-        guard let flight = alert.cheapest_flight else { return "" }
-        
-        // Use price category to show appropriate drop message
-        let currency = getCurrencySymbol(for: alert)
-        let currentPrice = Int(flight.price)
-        
-        if flight.price_category.lowercased() == "cheap" {
-            // Calculate drop based on current price
-            let estimatedDrop = Int(Double(currentPrice) * 0.3) // Assuming 30% drop for "cheap"
-            return "\(currency)\(estimatedDrop) drop"
-        } else {
-            // For other categories, show category
-            return "\(flight.price_category.capitalized) price"
-        }
+    private func getDestinationCode() -> String {
+        return alertData?.route.destination ?? "COK"
     }
     
-    private func getDepartureDate(for alert: AlertResponse) -> String {
-        if let flight = alert.cheapest_flight,
+    private func getDestinationName() -> String {
+        return alertData?.route.destination_name ?? "Cochin International Airport"
+    }
+    
+    private func getDepartureDate() -> String {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight,
            let departureDateTime = flight.outbound_departure_datetime {
             return formatFlightDate(departureDateTime)
-        } else {
+        } else if let alert = alertData {
             // Fallback to alert creation date if no flight date
             return formatAlertDate(alert.created_at)
         }
+        return "Fri 13 Jun" // Default fallback
     }
     
-    private func getCurrentPrice(for alert: AlertResponse) -> String {
-        guard let flight = alert.cheapest_flight else { return "" }
-        let currency = getCurrencySymbol(for: alert)
-        return "\(currency)\(formatPrice(flight.price))"
+    private func getCurrentPrice() -> String {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight {
+            let currency = getCurrencySymbol()
+            return "\(currency)\(formatPrice(flight.price))"
+        }
+        return "$55" // Default fallback
     }
     
-    private func getOriginalPrice(for alert: AlertResponse) -> String? {
-        guard let flight = alert.cheapest_flight,
-              flight.price_category.lowercased() == "cheap" else { return nil }
-        
-        let currency = getCurrencySymbol(for: alert)
-        let currentPrice = flight.price
-        
-        // Calculate estimated original price based on price category
-        let estimatedOriginalPrice = currentPrice / 0.7 // Assuming 30% drop
-        
-        return "\(currency)\(formatPrice(estimatedOriginalPrice))"
+    private func getOriginalPrice() -> String? {
+        if let alert = alertData,
+           let flight = alert.cheapest_flight,
+           flight.price_category.lowercased() == "cheap" {
+            
+            let currency = getCurrencySymbol()
+            let currentPrice = flight.price
+            
+            // Calculate estimated original price based on price category
+            let estimatedOriginalPrice = currentPrice / 0.7 // Assuming 30% drop
+            
+            return "\(currency)\(formatPrice(estimatedOriginalPrice))"
+        }
+        return nil // Don't show strikethrough price if not a dropped price
     }
     
-    private func getCurrencySymbol(for alert: AlertResponse) -> String {
+    private func getCurrencySymbol() -> String {
+        guard let alert = alertData else { return "$" }
+        
         switch alert.route.currency.uppercased() {
         case "INR":
             return "₹"
@@ -488,8 +306,8 @@ struct FACard: View {
 struct FACard_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
-            // Preview with shimmer (no data)
-            Text("Loading State (No Data)")
+            // Preview with your original design (no data)
+            Text("Default Design")
                 .font(.headline)
             FACard()
                 .padding()
@@ -506,7 +324,7 @@ struct FACard_Previews: PreviewProvider {
     }
     
     // Sample alert data for preview
-     static func sampleAlertResponse() -> AlertResponse {
+    private static func sampleAlertResponse() -> AlertResponse {
         return AlertResponse(
             id: "sample-id",
             user: AlertUserResponse(
@@ -549,13 +367,6 @@ struct FACard_Previews: PreviewProvider {
 }
 
 #Preview {
-    VStack(spacing: 20) {
-        Text("Loading State")
-        FACard() // No data - shows shimmer
-            .padding()
-        
-        Text("With Data")
-        FACard(alertData: FACard_Previews.sampleAlertResponse())
-            .padding()
-    }
+    FACard()
+        .padding()
 }
