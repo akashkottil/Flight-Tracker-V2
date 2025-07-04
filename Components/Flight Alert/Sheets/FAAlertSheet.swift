@@ -8,12 +8,17 @@ struct MyAlertsView: View {
     let alerts: [AlertResponse]
     let onAlertDeleted: ((AlertResponse) -> Void)?
     let onNewAlertCreated: ((AlertResponse) -> Void)?
+    let onAlertUpdated: ((AlertResponse) -> Void)?
     
-    // ADDED: States for delete functionality
+    // UPDATED: States for delete functionality with FADelete
     @State private var alertToDelete: AlertResponse?
-    @State private var showDeleteConfirmation = false
+    @State private var showFADelete = false  // Changed from showDeleteConfirmation
     @State private var isDeletingAlert = false
     @State private var deleteError: String?
+    
+    // ADDED: States for edit functionality
+    @State private var showEditSheet = false
+    @State private var alertToEdit: AlertResponse?
     
     // Network manager for delete operations
     private let alertNetworkManager = AlertNetworkManager.shared
@@ -22,11 +27,13 @@ struct MyAlertsView: View {
     init(
         alerts: [AlertResponse] = [],
         onAlertDeleted: ((AlertResponse) -> Void)? = nil,
-        onNewAlertCreated: ((AlertResponse) -> Void)? = nil
+        onNewAlertCreated: ((AlertResponse) -> Void)? = nil,
+        onAlertUpdated: ((AlertResponse) -> Void)? = nil
     ) {
         self.alerts = alerts
         self.onAlertDeleted = onAlertDeleted
         self.onNewAlertCreated = onNewAlertCreated
+        self.onAlertUpdated = onAlertUpdated
     }
     
     var body: some View {
@@ -124,23 +131,24 @@ struct MyAlertsView: View {
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
             }
             
-            // ADDED: Loading overlay during delete
-            if isDeletingAlert {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    
-                    Text("Deleting alert...")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                }
-                .padding(20)
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(12)
+            // UPDATED: FADelete overlay instead of loading overlay
+            if showFADelete {
+                FADelete(
+                    alertToDelete: alertToDelete,
+                    onDelete: {
+                        if let alert = alertToDelete {
+                            Task {
+                                await deleteAlert(alert)
+                            }
+                        }
+                    },
+                    onCancel: {
+                        showFADelete = false
+                        alertToDelete = nil
+                    },
+                    isDeleting: isDeletingAlert
+                )
+                .zIndex(1) // Ensure it appears on top
             }
         }
         .sheet(isPresented: $showLocationSheet) {
@@ -149,24 +157,14 @@ struct MyAlertsView: View {
                 onNewAlertCreated?(newAlert)
             }
         }
-        // ADDED: Delete confirmation alert
-        .alert("Delete Alert", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) {
-                alertToDelete = nil
-            }
-            Button("Delete", role: .destructive) {
-                if let alert = alertToDelete {
-                    Task {
-                        await deleteAlert(alert)
-                    }
+        .sheet(isPresented: $showEditSheet) {
+            if let alertToEdit = alertToEdit {
+                FAEditSheet(alertToEdit: alertToEdit) { updatedAlert in
+                    handleAlertUpdated(updatedAlert)
                 }
             }
-        } message: {
-            if let alert = alertToDelete {
-                Text("Are you sure you want to delete the alert for \(alert.route.origin_name) → \(alert.route.destination_name)?")
-            }
         }
-        // ADDED: Delete error alert
+        // UPDATED: Only keep delete error alert, removed delete confirmation alert
         .alert("Delete Failed", isPresented: .constant(deleteError != nil)) {
             Button("OK") {
                 deleteError = nil
@@ -178,7 +176,7 @@ struct MyAlertsView: View {
         }
     }
     
-    // UPDATED: alertCard now accepts real alert data and handles delete
+    // UPDATED: alertCard now triggers FADelete instead of native confirmation
     @ViewBuilder
     private func alertCard(
         alert: AlertResponse,
@@ -206,10 +204,10 @@ struct MyAlertsView: View {
                 
                 // Action buttons
                 HStack(spacing: 12) {
-                    // UPDATED: Delete button now triggers confirmation and API call
+                    // UPDATED: Delete button now triggers FADelete
                     Button(action: {
                         alertToDelete = alert
-                        showDeleteConfirmation = true
+                        showFADelete = true
                     }) {
                         Image("FADelete")
                             .foregroundColor(.red)
@@ -217,9 +215,10 @@ struct MyAlertsView: View {
                     }
                     .disabled(isDeletingAlert) // Disable while deleting
                     
+                    // Edit button
                     Button(action: {
-                        print("Edit alert: \(alert.id)")
-                        // TODO: Implement edit functionality
+                        alertToEdit = alert
+                        showEditSheet = true
                     }) {
                         Image("FAEdit")
                             .foregroundColor(.gray)
@@ -261,38 +260,6 @@ struct MyAlertsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
-            
-            // ADDED: Optional - Show alert creation date and price info
-//            if let cheapestFlight = alert.cheapest_flight {
-//                Divider()
-//                    .padding(.horizontal, 16)
-//                
-//                HStack {
-//                    VStack(alignment: .leading, spacing: 4) {
-//                        Text("Current Price")
-//                            .font(.system(size: 12))
-//                            .foregroundColor(.gray)
-//                        
-//                        Text("\(getCurrencySymbol(for: alert.route.currency))\(formatPrice(cheapestFlight.price))")
-//                            .font(.system(size: 16, weight: .bold))
-//                            .foregroundColor(.green)
-//                    }
-//                    
-//                    Spacer()
-//                    
-//                    VStack(alignment: .trailing, spacing: 4) {
-//                        Text("Status")
-//                            .font(.system(size: 12))
-//                            .foregroundColor(.gray)
-//                        
-//                        Text(cheapestFlight.price_category.capitalized)
-//                            .font(.system(size: 14, weight: .medium))
-//                            .foregroundColor(cheapestFlight.price_category.lowercased() == "cheap" ? .green : .orange)
-//                    }
-//                }
-//                .padding(.horizontal, 16)
-//                .padding(.bottom, 12)
-//            }
         }
         .background(
             RoundedRectangle(cornerRadius: 12)
@@ -306,6 +273,20 @@ struct MyAlertsView: View {
         .opacity(isDeletingAlert && alertToDelete?.id == alert.id ? 0.5 : 1.0) // Dim card being deleted
     }
     
+    // MARK: - Alert Update Handler
+    
+    private func handleAlertUpdated(_ updatedAlert: AlertResponse) {
+        print("✅ Alert updated successfully: \(updatedAlert.id)")
+        print("   New route: \(updatedAlert.route.origin_name) → \(updatedAlert.route.destination_name)")
+        
+        // Notify parent about the updated alert
+        onAlertUpdated?(updatedAlert)
+        
+        // Close the edit sheet
+        showEditSheet = false
+        alertToEdit = nil
+    }
+    
     // MARK: - Delete Alert Functionality
     
     @MainActor
@@ -314,18 +295,17 @@ struct MyAlertsView: View {
         deleteError = nil
         
         do {
-            // ENHANCED: Use the smart delete method with better error handling
+            // Use the smart delete method with better error handling
             try await alertNetworkManager.deleteAlertSmart(alertId: alert.id)
             
             // ✅ SUCCESS: Immediately notify parent to update local state
             onAlertDeleted?(alert)
             
-            // Clear the alert to delete
+            // Clear the alert to delete and hide FADelete
             alertToDelete = nil
+            showFADelete = false
             
             print("✅ Alert deleted successfully and UI updated: \(alert.id)")
-            
-            // Note: We don't fetch alerts here - let the parent handle state updates
             
         } catch {
             // Enhanced error handling with user-friendly messages
@@ -337,6 +317,7 @@ struct MyAlertsView: View {
                         print("⚠️ Alert not found (404) - treating as successful deletion")
                         onAlertDeleted?(alert)
                         alertToDelete = nil
+                        showFADelete = false
                         isDeletingAlert = false
                         return
                     } else if message.contains("permission") || message.contains("Access denied") {
@@ -352,6 +333,10 @@ struct MyAlertsView: View {
             }
             
             print("❌ Failed to delete alert: \(error)")
+            
+            // Hide FADelete on error
+            showFADelete = false
+            alertToDelete = nil
         }
         
         isDeletingAlert = false
@@ -431,6 +416,9 @@ struct MyAlertsView: View {
         },
         onNewAlertCreated: { alert in
             print("New alert created: \(alert.id)")
+        },
+        onAlertUpdated: { alert in
+            print("Alert updated: \(alert.id)")
         }
     )
 }

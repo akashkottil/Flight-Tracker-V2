@@ -168,24 +168,39 @@ struct FACard: View {
     
     // MARK: - Helper Methods for API Data
     
+    // UPDATED: Fixed price drop calculation using last_notified_price - current_price
     private func getPriceDropText() -> String {
-        if let alert = alertData,
-           let flight = alert.cheapest_flight {
+        guard let alert = alertData,
+              let flight = alert.cheapest_flight else {
+            return "$55 drop" // Default fallback
+        }
+        
+        let currency = getCurrencySymbol()
+        let currentPrice = flight.price
+        
+        // FIXED: Calculate actual drop using last_notified_price - current_price
+        if let lastNotifiedPrice = alert.last_notified_price {
+            let priceDrop = lastNotifiedPrice - currentPrice
             
-            // Use price category to show appropriate drop message
-            let currency = getCurrencySymbol()
-            let currentPrice = Int(flight.price)
-            
-            if flight.price_category.lowercased() == "cheap" {
-                // Calculate drop based on current price
-                let estimatedDrop = Int(Double(currentPrice) * 0.3) // Assuming 30% drop for "cheap"
-                return "\(currency)\(estimatedDrop) drop"
+            if priceDrop > 0 {
+                // There's an actual price drop
+                return "\(currency)\(formatPrice(priceDrop)) drop"
+            } else if priceDrop < 0 {
+                // Price has increased
+                let priceIncrease = abs(priceDrop)
+                return "\(currency)\(formatPrice(priceIncrease)) rise"
             } else {
-                // For other categories, show category
+                // No price change
+                return "No change"
+            }
+        } else {
+            // No last notified price available, fall back to price category
+            if flight.price_category.lowercased() == "cheap" {
+                return "Cheap price"
+            } else {
                 return "\(flight.price_category.capitalized) price"
             }
         }
-        return "$55 drop" // Default fallback
     }
     
     private func getOriginCode() -> String {
@@ -225,20 +240,21 @@ struct FACard: View {
         return "$55" // Default fallback
     }
     
+    // UPDATED: Show original price only when there's a confirmed price drop
     private func getOriginalPrice() -> String? {
-        if let alert = alertData,
-           let flight = alert.cheapest_flight,
-           flight.price_category.lowercased() == "cheap" {
-            
-            let currency = getCurrencySymbol()
-            let currentPrice = flight.price
-            
-            // Calculate estimated original price based on price category
-            let estimatedOriginalPrice = currentPrice / 0.7 // Assuming 30% drop
-            
-            return "\(currency)\(formatPrice(estimatedOriginalPrice))"
+        guard let alert = alertData,
+              let flight = alert.cheapest_flight,
+              let lastNotifiedPrice = alert.last_notified_price else {
+            return nil
         }
-        return nil // Don't show strikethrough price if not a dropped price
+        
+        // Only show strikethrough price if there's an actual drop
+        if lastNotifiedPrice > flight.price {
+            let currency = getCurrencySymbol()
+            return "\(currency)\(formatPrice(lastNotifiedPrice))"
+        }
+        
+        return nil // Don't show strikethrough if no drop
     }
     
     private func getCurrencySymbol() -> String {
@@ -312,57 +328,97 @@ struct FACard_Previews: PreviewProvider {
             FACard()
                 .padding()
             
-            // Preview with sample API data
-            Text("With Real API Data")
+            // Preview with price drop
+            Text("With Price Drop")
                 .font(.headline)
-            FACard(alertData: sampleAlertResponse()) { alert in
+            FACard(alertData: AlertResponse(
+                id: "sample-id-1",
+                user: AlertUserResponse(
+                    id: "testId",
+                    push_token: "token",
+                    created_at: "2025-06-27T14:06:14.919574Z",
+                    updated_at: "2025-06-27T14:06:14.919604Z"
+                ),
+                route: AlertRouteResponse(
+                    id: 151,
+                    origin: "COK",
+                    destination: "DXB",
+                    currency: "INR",
+                    origin_name: "Kochi",
+                    destination_name: "Dubai",
+                    created_at: "2025-06-25T09:32:47.398234Z",
+                    updated_at: "2025-06-27T14:06:14.932802Z"
+                ),
+                cheapest_flight: CheapestFlight(
+                    id: 13599,
+                    price: 4500, // Current price
+                    price_category: "cheap",
+                    outbound_departure_timestamp: 1752624000,
+                    outbound_departure_datetime: "2025-07-16T00:00:00Z",
+                    outbound_is_direct: true,
+                    inbound_departure_timestamp: nil,
+                    inbound_departure_datetime: nil,
+                    inbound_is_direct: nil,
+                    created_at: "2025-06-25T09:32:47.620603Z",
+                    updated_at: "2025-06-25T09:32:47.620615Z",
+                    route: 151
+                ),
+                image_url: "https://image.explore.lascadian.com/city_95673506.webp",
+                target_price: nil,
+                last_notified_price: 5555, // Previous price - showing a drop of 1055
+                created_at: "2025-06-27T14:06:14.947629Z",
+                updated_at: "2025-06-27T14:06:14.947659Z"
+            )) { alert in
+                print("Delete alert: \(alert.id)")
+            }
+            .padding()
+            
+            // Preview with no price drop
+            Text("No Price Change")
+                .font(.headline)
+            FACard(alertData: AlertResponse(
+                id: "sample-id-2",
+                user: AlertUserResponse(
+                    id: "testId",
+                    push_token: "token",
+                    created_at: "2025-06-27T14:06:14.919574Z",
+                    updated_at: "2025-06-27T14:06:14.919604Z"
+                ),
+                route: AlertRouteResponse(
+                    id: 152,
+                    origin: "JFK",
+                    destination: "LAX",
+                    currency: "USD",
+                    origin_name: "John F. Kennedy International Airport",
+                    destination_name: "Los Angeles International Airport",
+                    created_at: "2025-06-25T09:32:47.398234Z",
+                    updated_at: "2025-06-27T14:06:14.932802Z"
+                ),
+                cheapest_flight: CheapestFlight(
+                    id: 13600,
+                    price: 299, // Current price
+                    price_category: "normal",
+                    outbound_departure_timestamp: 1752624000,
+                    outbound_departure_datetime: "2025-07-16T00:00:00Z",
+                    outbound_is_direct: true,
+                    inbound_departure_timestamp: nil,
+                    inbound_departure_datetime: nil,
+                    inbound_is_direct: nil,
+                    created_at: "2025-06-25T09:32:47.620603Z",
+                    updated_at: "2025-06-25T09:32:47.620615Z",
+                    route: 152
+                ),
+                image_url: "https://image.explore.lascadian.com/city_95673506.webp",
+                target_price: nil,
+                last_notified_price: nil, // No previous price
+                created_at: "2025-06-27T14:06:14.947629Z",
+                updated_at: "2025-06-27T14:06:14.947659Z"
+            )) { alert in
                 print("Delete alert: \(alert.id)")
             }
             .padding()
         }
         .background(Color.gray.opacity(0.1))
-    }
-    
-    // Sample alert data for preview
-    private static func sampleAlertResponse() -> AlertResponse {
-        return AlertResponse(
-            id: "sample-id",
-            user: AlertUserResponse(
-                id: "testId",
-                push_token: "token",
-                created_at: "2025-06-27T14:06:14.919574Z",
-                updated_at: "2025-06-27T14:06:14.919604Z"
-            ),
-            route: AlertRouteResponse(
-                id: 151,
-                origin: "COK",
-                destination: "DXB",
-                currency: "INR",
-                origin_name: "Kochi",
-                destination_name: "Dubai",
-                created_at: "2025-06-25T09:32:47.398234Z",
-                updated_at: "2025-06-27T14:06:14.932802Z"
-            ),
-            cheapest_flight: CheapestFlight(
-                id: 13599,
-                price: 5555,
-                price_category: "cheap",
-                outbound_departure_timestamp: 1752624000,
-                outbound_departure_datetime: "2025-07-16T00:00:00Z",
-                outbound_is_direct: true,
-                inbound_departure_timestamp: nil,
-                inbound_departure_datetime: nil,
-                inbound_is_direct: nil,
-                created_at: "2025-06-25T09:32:47.620603Z",
-                updated_at: "2025-06-25T09:32:47.620615Z",
-                route: 151
-            ),
-            image_url: "https://image.explore.lascadian.com/city_95673506.webp",
-            target_price: nil,
-            last_notified_price: nil,
-            created_at: "2025-06-27T14:06:14.947629Z",
-            updated_at: "2025-06-27T14:06:14.947659Z"
-        )
     }
 }
 

@@ -91,10 +91,10 @@ struct AlertScreen: View {
                 .scaleEffect(1.5)
                 .progressViewStyle(CircularProgressViewStyle(tint: Color("FABlue")))
             
-            Text("Loading your alerts...")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.gray)
-            
+//            Text("Loading your alerts...")
+//                .font(.system(size: 16, weight: .medium))
+//                .foregroundColor(.gray)
+//            
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

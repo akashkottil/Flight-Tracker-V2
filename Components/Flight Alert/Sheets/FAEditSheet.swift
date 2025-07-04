@@ -1,15 +1,27 @@
+//
+//  FAEditSheet.swift
+//  AllFlights
+//
+//  Created by Akash Kottil on 03/07/25.
+//
+
 import SwiftUI
 import Combine
 
-struct FALocationSheet: View {
+struct FAEditSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var originText = ""
     @State private var destinationText = ""
     
-    // ADDED: Callback for when alert is created successfully
-    let onAlertCreated: ((AlertResponse) -> Void)?
+    @State private var hasPerformedOriginSearch = false
+    @State private var hasPerformedDestinationSearch = false
+
     
-    // ADDED: Search functionality states
+    // Alert data to edit
+    let alertToEdit: AlertResponse
+    let onAlertUpdated: ((AlertResponse) -> Void)?
+    
+    // Search functionality states
     @State private var originSearchResults: [FlightTrackAirport] = []
     @State private var destinationSearchResults: [FlightTrackAirport] = []
     @State private var isSearchingOrigin = false
@@ -17,26 +29,26 @@ struct FALocationSheet: View {
     @State private var originSearchError: String?
     @State private var destinationSearchError: String?
     
-    // ADDED: Selected airports
+    // Selected airports
     @State private var selectedOriginAirport: FlightTrackAirport?
     @State private var selectedDestinationAirport: FlightTrackAirport?
     
-    // ADDED: Active search field tracking
+    // Active search field tracking
     @State private var activeSearchField: SearchField?
     
-    // ADDED: Search tasks for cancellation
+    // Search tasks for cancellation
     @State private var originSearchTask: Task<Void, Never>?
     @State private var destinationSearchTask: Task<Void, Never>?
     
-    // ADDED: Alert creation states
-    @State private var isCreatingAlert = false
-    @State private var alertCreationError: String?
+    // Alert update states
+    @State private var isUpdatingAlert = false
+    @State private var alertUpdateError: String?
     
-    // ADDED: Network managers
+    // Network managers
     private let networkManager = FlightTrackNetworkManager.shared
     private let alertNetworkManager = AlertNetworkManager.shared
     
-    // ADDED: Search debounce timer
+    // Search debounce timer
     @State private var searchTimer: Timer?
     private let searchDebounceTime: TimeInterval = 0.3
     
@@ -45,9 +57,9 @@ struct FALocationSheet: View {
         case destination
     }
     
-    // ADDED: Initializers
-    init(onAlertCreated: ((AlertResponse) -> Void)? = nil) {
-        self.onAlertCreated = onAlertCreated
+    init(alertToEdit: AlertResponse, onAlertUpdated: ((AlertResponse) -> Void)? = nil) {
+        self.alertToEdit = alertToEdit
+        self.onAlertUpdated = onAlertUpdated
     }
     
     var body: some View {
@@ -63,7 +75,7 @@ struct FALocationSheet: View {
                         .background(Circle().fill(Color.gray.opacity(0.1)))
                 }
                 Spacer()
-                Text("From Where??")
+                Text("Edit Alert")
                     .bold()
                     .font(.title2)
                 Spacer()
@@ -82,7 +94,8 @@ struct FALocationSheet: View {
                         }
                         .onTapGesture {
                             activeSearchField = .origin
-                            if !originText.isEmpty {
+                            // Only search if this looks like user-typed content, not pre-populated
+                            if !originText.isEmpty && !isPrePopulatedText(originText) {
                                 performOriginSearch(query: originText)
                             }
                         }
@@ -97,12 +110,6 @@ struct FALocationSheet: View {
                         .padding(.trailing)
                     }
                     
-                    // ADDED: Loading indicator for origin
-                    if isSearchingOrigin {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .padding(.trailing)
-                    }
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 20)
@@ -122,7 +129,8 @@ struct FALocationSheet: View {
                         }
                         .onTapGesture {
                             activeSearchField = .destination
-                            if !destinationText.isEmpty {
+                            // Only search if this looks like user-typed content, not pre-populated
+                            if !destinationText.isEmpty && !isPrePopulatedText(destinationText) {
                                 performDestinationSearch(query: destinationText)
                             }
                         }
@@ -137,12 +145,7 @@ struct FALocationSheet: View {
                         .padding(.trailing)
                     }
                     
-                    // ADDED: Loading indicator for destination
-                    if isSearchingDestination {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .padding(.trailing)
-                    }
+                   
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 20)
@@ -152,58 +155,18 @@ struct FALocationSheet: View {
                 .padding(.top)
             }
             
-            // Use current location button design
-            Button(action: {
-                // TODO: Implement current location functionality
-                print("Use current location tapped")
-            }) {
-                HStack {
-                    Image(systemName: "location.fill")
-                        .foregroundColor(.blue)
-                    Text("Use Current Location")
-                        .foregroundColor(.blue)
-                        .fontWeight(.medium)
-                    Spacer()
-                }
-                .padding()
-                .padding(.vertical,10)
-            }
-            
             // Divider
             Divider()
                 .padding(.horizontal)
+                .padding(.top)
             
-            // ENHANCED: Alert creation status display
-            if isCreatingAlert {
-                VStack(spacing: 8) {
-                    HStack {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                        Text("Creating flight alert...")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.blue)
-                    }
-                    
-                    if let origin = selectedOriginAirport, let destination = selectedDestinationAirport {
-                        Text("\(origin.city) → \(destination.city)")
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                    }
-                }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
-                .padding(.horizontal)
-                .transition(.opacity.combined(with: .scale))
-            }
-            
-            // ENHANCED: Alert creation error display
-            if let error = alertCreationError {
+            // Alert update error display
+            if let error = alertUpdateError {
                 VStack(spacing: 8) {
                     HStack {
                         Image(systemName: "exclamationmark.triangle")
                             .foregroundColor(.orange)
-                        Text("Alert Creation Failed")
+                        Text("Update Failed")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.orange)
                     }
@@ -214,9 +177,9 @@ struct FALocationSheet: View {
                         .multilineTextAlignment(.center)
                     
                     Button("Try Again") {
-                        alertCreationError = nil
+                        alertUpdateError = nil
                         if let origin = selectedOriginAirport, let destination = selectedDestinationAirport {
-                            createAlert(origin: origin, destination: destination)
+                            updateAlert(origin: origin, destination: destination)
                         }
                     }
                     .font(.system(size: 12, weight: .medium))
@@ -233,7 +196,7 @@ struct FALocationSheet: View {
                 .transition(.opacity.combined(with: .scale))
             }
             
-            // ENHANCED: Dynamic search results list
+            // Dynamic search results list
             ScrollView {
                 LazyVStack(spacing: 0) {
                     // Show search results based on active field and search state
@@ -257,19 +220,91 @@ struct FALocationSheet: View {
                                 selectDestinationAirport(airport)
                             }
                         )
+                    } else if selectedOriginAirport != nil && selectedDestinationAirport != nil {
+                        // FIXED: Show nothing when both airports are selected
+                        EmptyView()
                     } else {
                         // Show default/popular airports when no active search
                         defaultAirportsSection()
                     }
                 }
             }
+            
+            // Confirm button
+            VStack {
+                Spacer()
+                
+                Button(action: {
+                    confirmUpdate()
+                }) {
+                    HStack {
+                        Text("Confirm Update")
+                    }
+                    .foregroundColor(.white)
+                    .font(.system(size: 18, weight: .medium))
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(canConfirmUpdate() ? Color("FABlue") : Color.gray)
+                    .cornerRadius(12)
+                }
+                .disabled(!canConfirmUpdate() || isUpdatingAlert)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
+            }
         }
         .background(Color.white)
-        .disabled(isCreatingAlert) // Disable interaction while creating alert
+        .disabled(isUpdatingAlert)
+        .onAppear {
+            setupInitialValues()
+        }
         .onDisappear {
-            // ADDED: Cancel any ongoing searches when view disappears
             cancelAllSearches()
         }
+        .alert("Update Failed", isPresented: .constant(alertUpdateError != nil)) {
+            Button("OK") {
+                alertUpdateError = nil
+            }
+        } message: {
+            if let error = alertUpdateError {
+                Text(error)
+            }
+        }
+    }
+    
+    // MARK: - Setup Initial Values
+    
+    private func setupInitialValues() {
+        // Pre-populate with current alert data
+        originText = "\(alertToEdit.route.origin.uppercased()) - \(alertToEdit.route.origin_name)"
+        destinationText = "\(alertToEdit.route.destination.uppercased()) - \(alertToEdit.route.destination_name)"
+        
+        // Create airport objects from current alert data
+        selectedOriginAirport = FlightTrackAirport(
+            iataCode: alertToEdit.route.origin.uppercased(),
+            icaoCode: nil,
+            name: alertToEdit.route.origin_name,
+            country: "",
+            countryCode: "",
+            isInternational: nil,
+            isMajor: nil,
+            city: alertToEdit.route.origin_name,
+            location: FlightTrackLocation(lat: 0.0, lng: 0.0),
+            timezone: FlightTrackTimezone(timezone: "", countryCode: "", gmt: 0.0, dst: 0.0)
+        )
+        
+        selectedDestinationAirport = FlightTrackAirport(
+            iataCode: alertToEdit.route.destination.uppercased(),
+            icaoCode: nil,
+            name: alertToEdit.route.destination_name,
+            country: "",
+            countryCode: "",
+            isInternational: nil,
+            isMajor: nil,
+            city: alertToEdit.route.destination_name,
+            location: FlightTrackLocation(lat: 0.0, lng: 0.0),
+            timezone: FlightTrackTimezone(timezone: "", countryCode: "", gmt: 0.0, dst: 0.0)
+        )
     }
     
     // MARK: - Search Results Section
@@ -282,40 +317,14 @@ struct FALocationSheet: View {
         searchText: String,
         onAirportSelected: @escaping (FlightTrackAirport) -> Void
     ) -> some View {
-        if isSearching {
-            // Show loading state
-            VStack(spacing: 16) {
-                ProgressView()
-                    .scaleEffect(1.2)
-                Text("Searching airports...")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-            }
-            .frame(height: 100)
-        } else if let error = error {
-            // Show error state
+        if let error = error {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 24))
                     .foregroundColor(.orange)
                 Text("Search Error")
                     .font(.system(size: 16, weight: .semibold))
-                Text(error)
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
-            .frame(height: 120)
-        } else if results.isEmpty && !searchText.isEmpty {
-            // Show no results state
-            VStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 24))
-                    .foregroundColor(.gray)
-                Text("No airports found")
-                    .font(.system(size: 16, weight: .semibold))
-                Text("Try searching with a different airport name or code")
+                Text("Please enter the airport name or code correctly to search")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -335,10 +344,32 @@ struct FALocationSheet: View {
                     }
                 )
             }
+        } else if !searchText.isEmpty && isPrePopulatedText(searchText) {
+            // FIXED: Show EmptyView if searchText is not empty and has already selected location
+            EmptyView()
+        } else if results.isEmpty && !searchText.isEmpty && hasUserSearched() {
+            // Only show "No airports found" if user has actually searched (not pre-populated)
+            VStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 24))
+                    .foregroundColor(.gray)
+                Text("No airports found")
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Try searching with a different airport name or code")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            .frame(height: 120)
+        } else {
+            // Show nothing for other cases
+            EmptyView()
         }
     }
+
     
-    // MARK: - ENHANCED Default Airports Section (Now Functional)
+    // MARK: - Default Airports Section
     
     @ViewBuilder
     private func defaultAirportsSection() -> some View {
@@ -352,7 +383,6 @@ struct FALocationSheet: View {
                 Spacer()
             }
             
-            // MADE FUNCTIONAL: Popular airports with proper airport objects
             locationResultRow(
                 iataCode: "COK",
                 cityName: "Kochi",
@@ -397,40 +427,10 @@ struct FALocationSheet: View {
                 )
                 handlePopularAirportSelection(airport)
             }
-            
-            locationResultRow(
-                iataCode: "LAX",
-                cityName: "Los Angeles",
-                countryName: "United States",
-                airportName: "Los Angeles International Airport"
-            ) {
-                let airport = createPopularAirport(
-                    iataCode: "LAX",
-                    name: "Los Angeles International Airport",
-                    city: "Los Angeles",
-                    country: "United States"
-                )
-                handlePopularAirportSelection(airport)
-            }
-            
-            locationResultRow(
-                iataCode: "LHR",
-                cityName: "London",
-                countryName: "United Kingdom",
-                airportName: "Heathrow Airport"
-            ) {
-                let airport = createPopularAirport(
-                    iataCode: "LHR",
-                    name: "Heathrow Airport",
-                    city: "London",
-                    country: "United Kingdom"
-                )
-                handlePopularAirportSelection(airport)
-            }
         }
     }
     
-    // MARK: - Location Result Row (Enhanced)
+    // MARK: - Location Result Row
     
     @ViewBuilder
     private func locationResultRow(
@@ -443,7 +443,6 @@ struct FALocationSheet: View {
         Button(action: onTap) {
             VStack(spacing: 0) {
                 HStack(spacing: 15) {
-                    // Airport code badge
                     Text(iataCode)
                         .font(.system(size: 14, weight: .medium))
                         .padding(8)
@@ -452,12 +451,10 @@ struct FALocationSheet: View {
                         .cornerRadius(8)
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        // Main location name
                         Text("\(cityName), \(countryName)")
                             .font(.headline)
                             .foregroundColor(.black)
                         
-                        // Subtitle with airport name
                         Text(airportName)
                             .font(.subheadline)
                             .foregroundColor(.gray)
@@ -470,7 +467,7 @@ struct FALocationSheet: View {
             }
         }
         .contentShape(Rectangle())
-        .disabled(isCreatingAlert) // Disable selection while creating alert
+        .disabled(isUpdatingAlert)
     }
     
     // MARK: - Search Functionality
@@ -478,16 +475,14 @@ struct FALocationSheet: View {
     private func handleOriginTextChange(_ newValue: String) {
         activeSearchField = .origin
         
-        // Cancel previous search timer
         searchTimer?.invalidate()
         
-        // Clear previous results if text is empty
         if newValue.isEmpty {
             clearOriginSearch()
             return
         }
         
-        // Start new debounced search
+        // Don't immediately mark as searched - wait for actual search
         searchTimer = Timer.scheduledTimer(withTimeInterval: searchDebounceTime, repeats: false) { _ in
             performOriginSearch(query: newValue)
         }
@@ -496,32 +491,33 @@ struct FALocationSheet: View {
     private func handleDestinationTextChange(_ newValue: String) {
         activeSearchField = .destination
         
-        // Cancel previous search timer
         searchTimer?.invalidate()
         
-        // Clear previous results if text is empty
         if newValue.isEmpty {
             clearDestinationSearch()
             return
         }
         
-        // Start new debounced search
+        // Don't immediately mark as searched - wait for actual search
         searchTimer = Timer.scheduledTimer(withTimeInterval: searchDebounceTime, repeats: false) { _ in
             performDestinationSearch(query: newValue)
         }
     }
     
+    // MARK: - SINGLE VERSION: Search Functions (Removed Duplicates)
+    
     private func performOriginSearch(query: String) {
         guard !query.isEmpty && query.count >= 2 else {
             originSearchResults = []
+            hasPerformedOriginSearch = false
             return
         }
         
-        // Cancel previous search
         originSearchTask?.cancel()
         
         isSearchingOrigin = true
         originSearchError = nil
+        hasPerformedOriginSearch = true // Mark that search has been performed
         
         originSearchTask = Task {
             do {
@@ -531,7 +527,6 @@ struct FALocationSheet: View {
                     if !Task.isCancelled {
                         self.originSearchResults = response.results
                         self.isSearchingOrigin = false
-                        print("✅ Origin search completed: \(response.results.count) airports found for '\(query)'")
                     }
                 }
             } catch {
@@ -540,7 +535,6 @@ struct FALocationSheet: View {
                         self.originSearchError = error.localizedDescription
                         self.originSearchResults = []
                         self.isSearchingOrigin = false
-                        print("❌ Origin search failed for '\(query)': \(error)")
                     }
                 }
             }
@@ -550,14 +544,15 @@ struct FALocationSheet: View {
     private func performDestinationSearch(query: String) {
         guard !query.isEmpty && query.count >= 2 else {
             destinationSearchResults = []
+            hasPerformedDestinationSearch = false
             return
         }
         
-        // Cancel previous search
         destinationSearchTask?.cancel()
         
         isSearchingDestination = true
         destinationSearchError = nil
+        hasPerformedDestinationSearch = true // Mark that search has been performed
         
         destinationSearchTask = Task {
             do {
@@ -567,7 +562,6 @@ struct FALocationSheet: View {
                     if !Task.isCancelled {
                         self.destinationSearchResults = response.results
                         self.isSearchingDestination = false
-                        print("✅ Destination search completed: \(response.results.count) airports found for '\(query)'")
                     }
                 }
             } catch {
@@ -576,25 +570,19 @@ struct FALocationSheet: View {
                         self.destinationSearchError = error.localizedDescription
                         self.destinationSearchResults = []
                         self.isSearchingDestination = false
-                        print("❌ Destination search failed for '\(query)': \(error)")
                     }
                 }
             }
         }
     }
     
-    // MARK: - Airport Selection with Alert Creation
+    // MARK: - Airport Selection
     
     private func selectOriginAirport(_ airport: FlightTrackAirport) {
         selectedOriginAirport = airport
         originText = "\(airport.iataCode) - \(airport.city)"
         originSearchResults = []
         activeSearchField = nil
-        
-        print("✅ Selected origin airport: \(airport.iataCode) - \(airport.city)")
-        
-        // Check if both airports are selected to create alert
-        checkAndCreateAlert()
     }
     
     private func selectDestinationAirport(_ airport: FlightTrackAirport) {
@@ -602,26 +590,19 @@ struct FALocationSheet: View {
         destinationText = "\(airport.iataCode) - \(airport.city)"
         destinationSearchResults = []
         activeSearchField = nil
-        
-        print("✅ Selected destination airport: \(airport.iataCode) - \(airport.city)")
-        
-        // Check if both airports are selected to create alert
-        checkAndCreateAlert()
     }
     
-    // ADDED: Handle popular airport selection
     private func handlePopularAirportSelection(_ airport: FlightTrackAirport) {
-        if selectedOriginAirport == nil {
+        if activeSearchField == .origin {
             selectOriginAirport(airport)
-        } else if selectedDestinationAirport == nil {
+        } else if activeSearchField == .destination {
             selectDestinationAirport(airport)
         } else {
-            // Both are filled, replace the destination
-            selectDestinationAirport(airport)
+            // Default to origin if no active field
+            selectOriginAirport(airport)
         }
     }
     
-    // ADDED: Create FlightTrackAirport object for popular airports
     private func createPopularAirport(iataCode: String, name: String, city: String, country: String) -> FlightTrackAirport {
         return FlightTrackAirport(
             iataCode: iataCode,
@@ -637,65 +618,72 @@ struct FALocationSheet: View {
         )
     }
     
-    // MARK: - FIXED Alert Creation Logic
+    // MARK: - Update Alert Logic
     
-    private func checkAndCreateAlert() {
-        guard let origin = selectedOriginAirport,
-              let destination = selectedDestinationAirport,
-              !isCreatingAlert else {
-            return
-        }
-        
-        // Ensure origin and destination are different
-        guard origin.iataCode != destination.iataCode else {
-            alertCreationError = "Origin and destination must be different"
-            return
-        }
-        
-        print("🚨 Both airports selected - creating alert...")
-        print("   Origin: \(origin.iataCode) - \(origin.city)")
-        print("   Destination: \(destination.iataCode) - \(destination.city)")
-        
-        createAlert(origin: origin, destination: destination)
+    private func canConfirmUpdate() -> Bool {
+        return selectedOriginAirport != nil && selectedDestinationAirport != nil
     }
     
-    private func createAlert(origin: FlightTrackAirport, destination: FlightTrackAirport) {
+    private func confirmUpdate() {
+        guard let origin = selectedOriginAirport,
+              let destination = selectedDestinationAirport else {
+            return
+        }
+        
+        updateAlert(origin: origin, destination: destination)
+    }
+    
+    private func updateAlert(origin: FlightTrackAirport, destination: FlightTrackAirport) {
         withAnimation(.easeInOut(duration: 0.3)) {
-            isCreatingAlert = true
-            alertCreationError = nil
+            isUpdatingAlert = true
+            alertUpdateError = nil
         }
         
         Task {
             do {
-                print("🚀 Making alert API call...")
-                let alertResponse = try await alertNetworkManager.createAlert(
+                print("🚀 Making edit alert API call...")
+                let updatedAlert = try await alertNetworkManager.editAlert(
+                    alertId: alertToEdit.id,
                     origin: origin.iataCode,
                     destination: destination.iataCode,
                     originName: origin.city,
                     destinationName: destination.city,
-                    currency: "INR"
+                    currency: alertToEdit.route.currency
                 )
                 
                 await MainActor.run {
-                    print("✅ Alert created successfully! Closing sheet and showing result...")
+                    print("✅ Alert updated successfully! Closing sheet...")
                     
-                    // Call the callback with the response
-                    onAlertCreated?(alertResponse)
-                    
-                    // Close the sheet
+                    onAlertUpdated?(updatedAlert)
                     dismiss()
                 }
                 
             } catch {
                 await MainActor.run {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        self.isCreatingAlert = false
-                        self.alertCreationError = error.localizedDescription
+                        self.isUpdatingAlert = false
+                        self.alertUpdateError = error.localizedDescription
                     }
-                    print("❌ Alert creation failed: \(error)")
+                    print("❌ Alert update failed: \(error)")
                 }
             }
         }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func hasUserSearched() -> Bool {
+        if activeSearchField == .origin {
+            return hasPerformedOriginSearch
+        } else if activeSearchField == .destination {
+            return hasPerformedDestinationSearch
+        }
+        return false
+    }
+    
+    private func isPrePopulatedText(_ text: String) -> Bool {
+        // Pre-populated text has format "COK - Kochi"
+        return text.contains(" - ") && text.count > 5
     }
     
     // MARK: - Clear Functions
@@ -703,27 +691,23 @@ struct FALocationSheet: View {
     private func clearOriginSearch() {
         originText = ""
         originSearchResults = []
-        selectedOriginAirport = nil
         isSearchingOrigin = false
         originSearchError = nil
         originSearchTask?.cancel()
         activeSearchField = nil
-        
-        // Clear alert error when changing inputs
-        alertCreationError = nil
+        alertUpdateError = nil
+        hasPerformedOriginSearch = false // Reset search state
     }
-    
+
     private func clearDestinationSearch() {
         destinationText = ""
         destinationSearchResults = []
-        selectedDestinationAirport = nil
         isSearchingDestination = false
         destinationSearchError = nil
         destinationSearchTask?.cancel()
         activeSearchField = nil
-        
-        // Clear alert error when changing inputs
-        alertCreationError = nil
+        alertUpdateError = nil
+        hasPerformedDestinationSearch = false // Reset search state
     }
     
     private func cancelAllSearches() {
@@ -735,7 +719,33 @@ struct FALocationSheet: View {
 
 // MARK: - Preview
 #Preview {
-    FALocationSheet { alertResponse in
-        print("Alert created: \(alertResponse.id)")
+    FAEditSheet(
+        alertToEdit: AlertResponse(
+            id: "sample-id",
+            user: AlertUserResponse(
+                id: "testId",
+                push_token: "token",
+                created_at: "2025-06-27T14:06:14.919574Z",
+                updated_at: "2025-06-27T14:06:14.919604Z"
+            ),
+            route: AlertRouteResponse(
+                id: 151,
+                origin: "COK",
+                destination: "DXB",
+                currency: "INR",
+                origin_name: "Kochi",
+                destination_name: "Dubai",
+                created_at: "2025-06-25T09:32:47.398234Z",
+                updated_at: "2025-06-27T14:06:14.932802Z"
+            ),
+            cheapest_flight: nil,
+            image_url: nil,
+            target_price: nil,
+            last_notified_price: nil,
+            created_at: "2025-06-27T14:06:14.947629Z",
+            updated_at: "2025-06-27T14:06:14.947659Z"
+        )
+    ) { updatedAlert in
+        print("Alert updated: \(updatedAlert.id)")
     }
 }

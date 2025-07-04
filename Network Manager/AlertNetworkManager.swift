@@ -540,12 +540,38 @@ class AlertNetworkManager {
         currency: String = "INR"
     ) async throws -> AlertResponse {
         
+        // Step 1: Check if the new route combination already exists
+        do {
+            let existingAlerts = try await fetchAlerts()
+            
+            // Check if any other alert (not the one being edited) has the same route
+            let conflictingAlert = existingAlerts.first { alert in
+                alert.id != alertId && // Not the same alert being edited
+                alert.route.origin == origin &&
+                alert.route.destination == destination &&
+                alert.route.currency == currency
+            }
+            
+            if let conflictingAlert = conflictingAlert {
+                // Instead of failing, we can delete the conflicting alert first
+                print("⚠️ Found conflicting alert: \(conflictingAlert.id)")
+                print("🗑️ Deleting conflicting alert before update...")
+                
+                try await deleteAlertSmart(alertId: conflictingAlert.id)
+                print("✅ Conflicting alert deleted successfully")
+            }
+            
+        } catch {
+            print("⚠️ Could not check for existing alerts: \(error)")
+            // Continue with the update attempt anyway
+        }
+        
+        // Step 2: Proceed with the original edit logic
         guard let url = URL(string: "\(baseURL)/api/alerts/\(alertId)/") else {
             print("❌ Invalid URL: \(baseURL)/api/alerts/\(alertId)/")
             throw AlertNetworkError.invalidURL
         }
         
-        // Create request body exactly matching the curl example
         let alertRequest = AlertRequest(
             user: AlertUser(
                 id: userId,
@@ -566,20 +592,13 @@ class AlertNetworkManager {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue(csrfToken, forHTTPHeaderField: "X-CSRFToken")
         
-        // Debug: Print request details
-        print("🌐 Edit Alert API Request:")
-        print("   URL: \(url)")
-        print("   Method: PUT")
-        print("   Headers: accept=application/json, Content-Type=application/json")
-        print("   CSRF-Token: \(csrfToken)")
-        
         do {
             let encoder = JSONEncoder()
             let jsonData = try encoder.encode(alertRequest)
             request.httpBody = jsonData
             
             if let jsonString = String(data: jsonData, encoding: .utf8) {
-                print("   Body: \(jsonString)")
+                print("📝 Edit request body: \(jsonString)")
             }
         } catch {
             print("❌ Error encoding edit alert request: \(error)")
@@ -590,30 +609,19 @@ class AlertNetworkManager {
             print("🚀 Making edit alert API call...")
             let (data, response) = try await URLSession.shared.data(for: request)
             
-            // Debug response
-            if let httpResponse = response as? HTTPURLResponse {
-                print("📡 Edit Alert API Response:")
-                print("   Status Code: \(httpResponse.statusCode)")
-                print("   Headers: \(httpResponse.allHeaderFields)")
-            }
-            
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid HTTP response")
                 throw AlertNetworkError.invalidResponse
             }
             
-            // Log raw response for debugging
             if let responseString = String(data: data, encoding: .utf8) {
-                print("   Response Body: \(responseString)")
-            } else {
-                print("   Response Body: Unable to decode as string")
+                print("📡 Edit Response (\(httpResponse.statusCode)): \(responseString)")
             }
             
             guard 200...299 ~= httpResponse.statusCode else {
                 let errorMessage = "Edit Alert API failed with status \(httpResponse.statusCode)"
                 print("❌ \(errorMessage)")
                 
-                // Try to parse error response
                 if let responseString = String(data: data, encoding: .utf8) {
                     throw AlertNetworkError.serverError("API Error (\(httpResponse.statusCode)): \(responseString)")
                 } else {
@@ -634,7 +642,6 @@ class AlertNetworkManager {
                 return alertResponse
             } catch {
                 print("❌ Edit alert response decoding error: \(error)")
-                print("❌ Raw response: \(String(data: data, encoding: .utf8) ?? "Unable to decode")")
                 throw AlertNetworkError.decodingError(error)
             }
             
