@@ -8,6 +8,7 @@ struct FAAlertView: View {
     let showAddButton: Bool
     let onAlertDeleted: ((AlertResponse) -> Void)?
     let onNewAlertCreated: ((AlertResponse) -> Void)?
+    let onAlertUpdated: ((AlertResponse) -> Void)?  // NEW: Added edit callback
     
     @State private var showLocationSheet = false
     @State private var showMyAlertsSheet = false
@@ -17,13 +18,15 @@ struct FAAlertView: View {
         isLoadingShimmer: Bool = false,
         showAddButton: Bool = true,
         onAlertDeleted: ((AlertResponse) -> Void)? = nil,
-        onNewAlertCreated: ((AlertResponse) -> Void)? = nil
+        onNewAlertCreated: ((AlertResponse) -> Void)? = nil,
+        onAlertUpdated: ((AlertResponse) -> Void)? = nil  // NEW: Added edit callback
     ) {
         self.alerts = alerts
         self.isLoadingShimmer = isLoadingShimmer
         self.showAddButton = showAddButton
         self.onAlertDeleted = onAlertDeleted
         self.onNewAlertCreated = onNewAlertCreated
+        self.onAlertUpdated = onAlertUpdated  // NEW: Initialize edit callback
     }
     
     var body: some View {
@@ -151,6 +154,11 @@ struct FAAlertView: View {
                 onNewAlertCreated: { newAlert in
                     onNewAlertCreated?(newAlert)
                     showMyAlertsSheet = false
+                },
+                onAlertUpdated: { updatedAlert in  // NEW: Handle alert updates
+                    print("🔄 Alert updated in FAAlertView: \(updatedAlert.id)")
+                    onAlertUpdated?(updatedAlert)
+                    // Note: Don't close the sheet here, let user continue managing alerts
                 }
             )
         }
@@ -208,6 +216,9 @@ struct FAAlertView: View {
         },
         onNewAlertCreated: { alert in
             print("New alert created: \(alert.id)")
+        },
+        onAlertUpdated: { alert in  // NEW: Added for preview
+            print("Alert updated: \(alert.id)")
         }
     )
 }
@@ -261,6 +272,9 @@ struct FAAlertView: View {
         },
         onNewAlertCreated: { alert in
             print("New alert created: \(alert.id)")
+        },
+        onAlertUpdated: { alert in  // NEW: Added for preview
+            print("Alert updated: \(alert.id)")
         }
     )
 }
@@ -275,6 +289,9 @@ struct FAAlertView: View {
         },
         onNewAlertCreated: { alert in
             print("New alert created: \(alert.id)")
+        },
+        onAlertUpdated: { alert in  // NEW: Added for preview
+            print("Alert updated: \(alert.id)")
         }
     )
 }

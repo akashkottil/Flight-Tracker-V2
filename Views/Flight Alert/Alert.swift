@@ -3,11 +3,11 @@ import SwiftUI
 struct AlertScreen: View {
     // UPDATED: Better state management for tab switching
     @State private var alerts: [AlertResponse] = []
-    @State private var isInitialLoading = false      // Only for first time loading
-    @State private var isRefreshing = false          // Only for pull-to-refresh
+    @State private var isInitialLoading = false
+    @State private var isRefreshing = false
     @State private var alertsError: String?
-    @State private var hasEverLoaded = false         // Has data been loaded at least once
-    @State private var showAddButton = false        // Controls animated button
+    @State private var hasEverLoaded = false
+    @State private var showAddButton = false        
     
     // Network manager
     private let alertNetworkManager = AlertNetworkManager.shared
@@ -41,6 +41,9 @@ struct AlertScreen: View {
                     },
                     onNewAlertCreated: { newAlert in
                         handleNewAlertCreated(newAlert)
+                    },
+                    onAlertUpdated: { updatedAlert in
+                        handleAlertUpdated(updatedAlert)
                     }
                 )
             } else {
@@ -239,6 +242,25 @@ struct AlertScreen: View {
             }
             
             print("✅ New alert added. Total: \(alerts.count)")
+        }
+    }
+    
+    // MARK: - NEW: Alert Update Handler
+    
+    private func handleAlertUpdated(_ updatedAlert: AlertResponse) {
+        print("🔄 Handling alert update: \(updatedAlert.id)")
+        
+        // Find and replace the alert in the array
+        if let index = alerts.firstIndex(where: { $0.id == updatedAlert.id }) {
+            alerts[index] = updatedAlert
+            saveAlertsToCache()
+            
+            print("✅ Alert updated successfully: \(updatedAlert.route.origin_name) → \(updatedAlert.route.destination_name)")
+            print("✅ Alert list updated. Total: \(alerts.count)")
+        } else {
+            print("⚠️ Alert to update not found in current list: \(updatedAlert.id)")
+            // Fallback: add it as a new alert
+            handleNewAlertCreated(updatedAlert)
         }
     }
     
