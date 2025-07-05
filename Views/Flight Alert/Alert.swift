@@ -1,66 +1,61 @@
 import SwiftUI
 
 struct AlertScreen: View {
-    // UPDATED: Better state management for tab switching
+    // State management for the new workflow
     @State private var alerts: [AlertResponse] = []
+    @State private var alertsWithFlights: [AlertResponse] = []
+    @State private var alertsWithoutFlights: [AlertResponse] = []
     @State private var isInitialLoading = false
     @State private var isRefreshing = false
     @State private var alertsError: String?
     @State private var hasEverLoaded = false
-    @State private var showAddButton = false        
+    @State private var showAddButton = false
     
     // Network manager
     private let alertNetworkManager = AlertNetworkManager.shared
     
-    // UPDATED: Clear logic for when to show what
-    private var shouldShowShimmerCards: Bool {
-        return isRefreshing && !alerts.isEmpty  // Only during manual refresh
+    // MARK: - Computed Properties for Workflow Logic
+    
+    private var shouldShowCreateView: Bool {
+        return !isInitialLoading && alerts.isEmpty && hasEverLoaded
+    }
+    
+    private var shouldShowAlertView: Bool {
+        return !alerts.isEmpty && hasEverLoaded
     }
     
     private var shouldShowFullScreenLoading: Bool {
-        return isInitialLoading && alerts.isEmpty && !hasEverLoaded  // Only first time ever
+        return isInitialLoading && alerts.isEmpty && !hasEverLoaded
     }
     
-    private var hasAlerts: Bool {
-        return !alerts.isEmpty
+    private var shouldShowShimmerCards: Bool {
+        return isRefreshing && !alerts.isEmpty
     }
     
     var body: some View {
         Group {
             if shouldShowFullScreenLoading {
-                // Show full-screen loading ONLY on very first load
+                // Show full-screen loading on first load
                 fullScreenLoadingView
-            } else if hasAlerts || shouldShowShimmerCards {
-                // Show alerts view (either real cards or shimmer during refresh)
-                FAAlertView(
-                    alerts: alerts,
-                    isLoadingShimmer: shouldShowShimmerCards,
-                    showAddButton: showAddButton,
-                    onAlertDeleted: { deletedAlert in
-                        handleAlertDeleted(deletedAlert)
-                    },
-                    onNewAlertCreated: { newAlert in
-                        handleNewAlertCreated(newAlert)
-                    },
-                    onAlertUpdated: { updatedAlert in
-                        handleAlertUpdated(updatedAlert)
-                    }
-                )
-            } else {
-                // Show create view when no alerts exist and not loading
+            } else if shouldShowCreateView {
+                // NEW: Show create view when user has no alerts
                 FACreateView(
                     onAlertCreated: { alertResponse in
                         handleNewAlertCreated(alertResponse)
                     }
                 )
+            } else if shouldShowAlertView {
+                // Show alerts view with proper content based on cheapest_flight status
+                alertsContentView
+            } else {
+                // Fallback loading state
+                fullScreenLoadingView
             }
         }
         .onAppear {
-            // FIXED: Proper tab switch handling
             handleTabAppear()
         }
         .refreshable {
-            // Manual refresh - show shimmer
             Task {
                 await performManualRefresh()
             }
@@ -81,6 +76,154 @@ struct AlertScreen: View {
         }
     }
     
+    // MARK: - Alert Content View (NEW)
+    
+    @ViewBuilder
+    private var alertsContentView: some View {
+        ZStack {
+            GradientColor.BlueWhite
+                .ignoresSafeArea()
+            
+            VStack {
+                FAheader()
+                
+                ScrollView {
+                    VStack(spacing: 0) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text("Today's price drop alerts")
+                                    .font(.system(size: 20, weight: .bold))
+                                Text("Real-time flight price monitoring")
+                                    .font(.system(size: 14, weight: .regular))
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        // MAIN CONTENT: Show cards or NoAlert based on cheapest_flight
+                        if shouldShowShimmerCards {
+                            // Show shimmer during refresh
+                            ForEach(0..<max(alerts.count, 3), id: \.self) { index in
+                                FAShimmerCard()
+                                    .padding()
+                                    .id("shimmer-\(index)")
+                            }
+                        } else if alertsWithFlights.isEmpty {
+                            // NEW: Show NoAlert when all alerts have null cheapest_flight
+                            VStack(spacing: 30) {
+                                Spacer()
+                                NoAlert()
+                                Spacer()
+                            }
+                            .frame(minHeight: 300)
+                        } else {
+                            // Show FACards only for alerts with cheapest_flight data
+                            ForEach(alertsWithFlights) { alert in
+                                FACard(
+                                    alertData: alert,
+                                    onDelete: { deletedAlert in
+                                        handleAlertDeleted(deletedAlert)
+                                    }
+                                )
+                                .padding()
+                                .id("alert-\(alert.id)")
+                            }
+                        }
+                        
+                        Color.clear
+                            .frame(height: 100)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.4), value: shouldShowShimmerCards)
+                .animation(.easeInOut(duration: 0.4), value: alertsWithFlights.count)
+            }
+            
+            // Bottom button - always show when in alert view
+            if showAddButton {
+                VStack {
+                    Spacer()
+                    
+                    HStack(spacing: 0) {
+                        // Add new alert button
+                        Button(action: {
+                            showLocationSheet = true
+                        }) {
+                            HStack {
+                                Image("FAPlus")
+                                Text("Add new alert")
+                            }
+                            .padding()
+                        }
+                        .disabled(shouldShowShimmerCards)
+                        .opacity(shouldShowShimmerCards ? 0.7 : 1.0)
+                        
+                        // Vertical divider
+                        Rectangle()
+                            .fill(Color.white.opacity(0.4))
+                            .frame(width: 1, height: 50)
+                        
+                        // Hamburger button
+                        Button(action: {
+                            showMyAlertsSheet = true
+                        }) {
+                            HStack {
+                                Image("FAHamburger")
+                            }
+                            .padding()
+                        }
+                        .disabled(shouldShowShimmerCards)
+                        .opacity(shouldShowShimmerCards ? 0.7 : 1.0)
+                    }
+                    .foregroundColor(.white)
+                    .font(.system(size: 18))
+                    .background(Color("FABlue"))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
+                }
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.8)
+                        .combined(with: .opacity)
+                        .combined(with: .move(edge: .bottom)),
+                    removal: .scale(scale: 0.8)
+                        .combined(with: .opacity)
+                        .combined(with: .move(edge: .bottom))
+                ))
+                .animation(.spring(response: 0.6, dampingFraction: 0.7), value: showAddButton)
+            }
+        }
+        .sheet(isPresented: $showLocationSheet) {
+            FALocationSheet { newAlert in
+                handleNewAlertCreated(newAlert)
+            }
+        }
+        .sheet(isPresented: $showMyAlertsSheet) {
+            MyAlertsView(
+                alerts: alerts, // Pass all alerts to MyAlertsView
+                onAlertDeleted: { deletedAlert in
+                    handleAlertDeleted(deletedAlert)
+                    
+                    // Close sheet if no alerts left
+                    if alerts.count <= 1 {
+                        showMyAlertsSheet = false
+                    }
+                },
+                onNewAlertCreated: { newAlert in
+                    handleNewAlertCreated(newAlert)
+                    showMyAlertsSheet = false
+                },
+                onAlertUpdated: { updatedAlert in
+                    handleAlertUpdated(updatedAlert)
+                }
+            )
+        }
+    }
+    
+    // Sheet state variables
+    @State private var showLocationSheet = false
+    @State private var showMyAlertsSheet = false
+    
     // MARK: - Loading View
     
     private var fullScreenLoadingView: some View {
@@ -91,28 +234,23 @@ struct AlertScreen: View {
                 .scaleEffect(1.5)
                 .progressViewStyle(CircularProgressViewStyle(tint: Color("FABlue")))
             
-//            Text("Loading your alerts...")
-//                .font(.system(size: 16, weight: .medium))
-//                .foregroundColor(.gray)
-//            
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(GradientColor.BlueWhite.ignoresSafeArea())
     }
     
-    // MARK: - FIXED: Tab Switching Logic
+    // MARK: - Tab Switching Logic
     
     private func handleTabAppear() {
         // If we already have alerts in state, do NOTHING
         if !alerts.isEmpty {
             print("📱 Tab switch: Already have \(alerts.count) alerts, showing instantly")
-            // Button should already be visible from previous load - no animation needed
             showAddButton = true
             return
         }
         
-        // If we don't have alerts in state, try loading from cache
+        // Try loading from cache first
         loadFromCacheIfAvailable()
         
         // If cache loading didn't work, fetch from API
@@ -131,38 +269,44 @@ struct AlertScreen: View {
             return
         }
         
-        // Load cached data instantly
-        alerts = cachedAlerts
+        // Load cached data and categorize
+        updateAlertsAndCategorize(cachedAlerts)
         hasEverLoaded = true
-        
-        // Show button immediately for cached data - NO ANIMATION on cache load
         showAddButton = true
         
-        print("📱 ✅ Loaded \(alerts.count) alerts from cache instantly - button visible")
+        print("📱 ✅ Loaded \(alerts.count) alerts from cache instantly")
+        print("📱 ✅ With flights: \(alertsWithFlights.count), Without flights: \(alertsWithoutFlights.count)")
     }
     
     // MARK: - API Loading Methods
     
     @MainActor
     private func performInitialLoad() async {
+        print("🚀 Starting initial load...")
         isInitialLoading = true
         alertsError = nil
-        showAddButton = false  // Hide button during loading
+        showAddButton = false
         
         do {
-            let fetchedAlerts = try await alertNetworkManager.fetchAlerts()
-            alerts = fetchedAlerts
+            // NEW: Use the specific user endpoint
+            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+            updateAlertsAndCategorize(fetchedAlerts)
             hasEverLoaded = true
             
             // Save to cache
             saveAlertsToCache()
             
-            // Show button with animation after loading completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                showAddButtonWithAnimation()
-            }
+            print("✅ Initial load completed:")
+            print("   Total alerts: \(alerts.count)")
+            print("   With flights: \(alertsWithFlights.count)")
+            print("   Without flights: \(alertsWithoutFlights.count)")
             
-            print("✅ Initial load completed: \(fetchedAlerts.count) alerts")
+            // Show button with animation if we have alerts
+            if !alerts.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    showAddButtonWithAnimation()
+                }
+            }
             
         } catch {
             alertsError = error.localizedDescription
@@ -174,6 +318,8 @@ struct AlertScreen: View {
     
     @MainActor
     private func performManualRefresh() async {
+        print("🔄 Starting manual refresh...")
+        
         // Only show shimmer if we have existing alerts
         if !alerts.isEmpty {
             isRefreshing = true
@@ -182,14 +328,18 @@ struct AlertScreen: View {
         alertsError = nil
         
         do {
-            let fetchedAlerts = try await alertNetworkManager.fetchAlerts()
-            alerts = fetchedAlerts
+            // NEW: Use the specific user endpoint
+            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+            updateAlertsAndCategorize(fetchedAlerts)
             hasEverLoaded = true
             
             // Save to cache
             saveAlertsToCache()
             
-            print("✅ Manual refresh completed: \(fetchedAlerts.count) alerts")
+            print("✅ Manual refresh completed:")
+            print("   Total alerts: \(alerts.count)")
+            print("   With flights: \(alertsWithFlights.count)")
+            print("   Without flights: \(alertsWithoutFlights.count)")
             
         } catch {
             alertsError = error.localizedDescription
@@ -197,6 +347,21 @@ struct AlertScreen: View {
         }
         
         isRefreshing = false
+    }
+    
+    // MARK: - NEW: Alert Categorization Logic
+    
+    private func updateAlertsAndCategorize(_ newAlerts: [AlertResponse]) {
+        alerts = newAlerts
+        
+        // Categorize alerts based on cheapest_flight
+        alertsWithFlights = alerts.filter { $0.cheapest_flight != nil }
+        alertsWithoutFlights = alerts.filter { $0.cheapest_flight == nil }
+        
+        print("📊 Alert categorization:")
+        print("   Total: \(alerts.count)")
+        print("   With flights: \(alertsWithFlights.count)")
+        print("   Without flights: \(alertsWithoutFlights.count)")
     }
     
     // MARK: - Button Animation
@@ -218,7 +383,8 @@ struct AlertScreen: View {
     private func handleAlertDeleted(_ deletedAlert: AlertResponse) {
         print("🗑️ Handling alert deletion: \(deletedAlert.id)")
         
-        alerts.removeAll { $0.id == deletedAlert.id }
+        let newAlerts = alerts.filter { $0.id != deletedAlert.id }
+        updateAlertsAndCategorize(newAlerts)
         saveAlertsToCache()
         
         // Hide button if no alerts left
@@ -233,7 +399,8 @@ struct AlertScreen: View {
         print("➕ Handling new alert creation: \(newAlert.id)")
         
         if !alerts.contains(where: { $0.id == newAlert.id }) {
-            alerts.append(newAlert)
+            let newAlerts = alerts + [newAlert]
+            updateAlertsAndCategorize(newAlerts)
             saveAlertsToCache()
             
             // Show button if not already visible
@@ -245,21 +412,19 @@ struct AlertScreen: View {
         }
     }
     
-    // MARK: - NEW: Alert Update Handler
-    
     private func handleAlertUpdated(_ updatedAlert: AlertResponse) {
         print("🔄 Handling alert update: \(updatedAlert.id)")
         
         // Find and replace the alert in the array
         if let index = alerts.firstIndex(where: { $0.id == updatedAlert.id }) {
-            alerts[index] = updatedAlert
+            var newAlerts = alerts
+            newAlerts[index] = updatedAlert
+            updateAlertsAndCategorize(newAlerts)
             saveAlertsToCache()
             
-            print("✅ Alert updated successfully: \(updatedAlert.route.origin_name) → \(updatedAlert.route.destination_name)")
-            print("✅ Alert list updated. Total: \(alerts.count)")
+            print("✅ Alert updated successfully")
         } else {
             print("⚠️ Alert to update not found in current list: \(updatedAlert.id)")
-            // Fallback: add it as a new alert
             handleNewAlertCreated(updatedAlert)
         }
     }
@@ -275,17 +440,6 @@ struct AlertScreen: View {
         } catch {
             print("❌ Failed to cache alerts: \(error)")
         }
-    }
-    
-    // MARK: - Debug Methods
-    
-    private func clearCache() {
-        UserDefaults.standard.removeObject(forKey: "CachedAlerts")
-        UserDefaults.standard.removeObject(forKey: "AlertsCacheTimestamp")
-        alerts = []
-        hasEverLoaded = false
-        showAddButton = false
-        print("🗑️ Cache cleared")
     }
 }
 
