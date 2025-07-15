@@ -584,8 +584,6 @@ class AlertNetworkManager {
 
     // MARK: - Edit Alert Method
 
-    // Replace the editAlert method in your AlertNetworkManager.swift with this improved version
-
     func editAlert(
         alertId: String,
         origin: String,
@@ -595,64 +593,33 @@ class AlertNetworkManager {
         currency: String = "INR"
     ) async throws -> AlertResponse {
         
-        print("🔄 Starting edit alert process...")
-        print("   Alert ID: \(alertId)")
-        print("   New Route: \(origin) → \(destination) (\(currency))")
-        
-        // Step 1: Fetch current alerts to check for conflicts
-        var existingAlerts: [AlertResponse] = []
+        // Step 1: Check if the new route combination already exists
         do {
-            existingAlerts = try await fetchUserAlerts()
-            print("✅ Fetched \(existingAlerts.count) existing alerts for conflict check")
-        } catch {
-            print("⚠️ Could not fetch existing alerts: \(error)")
-            print("⚠️ Proceeding with edit attempt anyway...")
-        }
-        
-        // Step 2: Check if we're trying to change to the same route (no-op case)
-        if let currentAlert = existingAlerts.first(where: { $0.id == alertId }) {
-            if currentAlert.route.origin == origin &&
-               currentAlert.route.destination == destination &&
-               currentAlert.route.currency == currency {
-                print("ℹ️ No changes detected - same route. Updating names only...")
-                // Continue with update to refresh the names
-            }
-        }
-        
-        // Step 3: Enhanced conflict detection and resolution
-        let conflictingAlerts = existingAlerts.filter { alert in
-            alert.id != alertId && // Not the same alert being edited
-            alert.route.origin.uppercased() == origin.uppercased() &&
-            alert.route.destination.uppercased() == destination.uppercased() &&
-            alert.route.currency.uppercased() == currency.uppercased()
-        }
-        
-        if !conflictingAlerts.isEmpty {
-            print("⚠️ Found \(conflictingAlerts.count) conflicting alert(s)")
+            let existingAlerts = try await fetchUserAlerts()
             
-            // Strategy: Delete conflicting alerts before updating
-            for conflictingAlert in conflictingAlerts {
-                print("🗑️ Deleting conflicting alert: \(conflictingAlert.id)")
-                print("   Route: \(conflictingAlert.route.origin) → \(conflictingAlert.route.destination)")
+            // Check if any other alert (not the one being edited) has the same route
+            let conflictingAlert = existingAlerts.first { alert in
+                alert.id != alertId && // Not the same alert being edited
+                alert.route.origin == origin &&
+                alert.route.destination == destination &&
+                alert.route.currency == currency
+            }
+            
+            if let conflictingAlert = conflictingAlert {
+                // Instead of failing, we can delete the conflicting alert first
+                print("⚠️ Found conflicting alert: \(conflictingAlert.id)")
+                print("🗑️ Deleting conflicting alert before update...")
                 
-                do {
-                    try await deleteAlertSmart(alertId: conflictingAlert.id)
-                    print("✅ Successfully deleted conflicting alert: \(conflictingAlert.id)")
-                } catch {
-                    print("❌ Failed to delete conflicting alert: \(conflictingAlert.id)")
-                    print("   Error: \(error)")
-                    
-                    // If we can't delete the conflicting alert, we can't proceed
-                    throw AlertNetworkError.serverError("Cannot update alert: A similar route already exists and could not be removed. Please delete the existing \(conflictingAlert.route.origin) → \(conflictingAlert.route.destination) alert first.")
-                }
+                try await deleteAlertSmart(alertId: conflictingAlert.id)
+                print("✅ Conflicting alert deleted successfully")
             }
             
-            // Wait a moment for the deletion to process
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-            print("✅ All conflicting alerts deleted, proceeding with update...")
+        } catch {
+            print("⚠️ Could not check for existing alerts: \(error)")
+            // Continue with the update attempt anyway
         }
         
-        // Step 4: Proceed with the edit API call
+        // Step 2: Proceed with the original edit logic
         guard let url = URL(string: "\(baseURL)/api/alerts/\(alertId)/") else {
             print("❌ Invalid URL: \(baseURL)/api/alerts/\(alertId)/")
             throw AlertNetworkError.invalidURL
@@ -664,9 +631,9 @@ class AlertNetworkManager {
                 push_token: pushToken
             ),
             route: AlertRoute(
-                origin: origin.uppercased(), // Ensure uppercase
-                destination: destination.uppercased(), // Ensure uppercase
-                currency: currency.uppercased(), // Ensure uppercase
+                origin: origin,
+                destination: destination,
+                currency: currency,
                 origin_name: originName,
                 destination_name: destinationName
             )
@@ -691,7 +658,6 @@ class AlertNetworkManager {
             throw AlertNetworkError.decodingError(error)
         }
         
-        // Step 5: Make the API call with enhanced error handling
         do {
             print("🚀 Making edit alert API call...")
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -705,24 +671,6 @@ class AlertNetworkManager {
                 print("📡 Edit Response (\(httpResponse.statusCode)): \(responseString)")
             }
             
-            // Handle specific error cases
-            if httpResponse.statusCode == 400 {
-                if let responseString = String(data: data, encoding: .utf8),
-                   responseString.contains("must make a unique set") {
-                    print("❌ Unique constraint violation detected")
-                    
-                    // Try alternative approach: Create new alert and delete old one
-                    return try await handleUniqueConstraintViolation(
-                        originalAlertId: alertId,
-                        origin: origin,
-                        destination: destination,
-                        originName: originName,
-                        destinationName: destinationName,
-                        currency: currency
-                    )
-                }
-            }
-            
             guard 200...299 ~= httpResponse.statusCode else {
                 let errorMessage = "Edit Alert API failed with status \(httpResponse.statusCode)"
                 print("❌ \(errorMessage)")
@@ -734,7 +682,7 @@ class AlertNetworkManager {
                 }
             }
             
-            // Step 6: Parse successful response
+            // Parse successful response
             do {
                 let decoder = JSONDecoder()
                 let alertResponse = try decoder.decode(AlertResponse.self, from: data)
@@ -759,54 +707,6 @@ class AlertNetworkManager {
             }
         }
     }
-
-    // MARK: - Helper method for handling unique constraint violations
-
-    private func handleUniqueConstraintViolation(
-        originalAlertId: String,
-        origin: String,
-        destination: String,
-        originName: String,
-        destinationName: String,
-        currency: String
-    ) async throws -> AlertResponse {
-        
-        print("🔄 Handling unique constraint violation with alternative approach...")
-        print("   Strategy: Create new alert → Delete old alert")
-        
-        // Step 1: Create a new alert with the desired route
-        do {
-            let newAlert = try await createAlert(
-                origin: origin,
-                destination: destination,
-                originName: originName,
-                destinationName: destinationName,
-                currency: currency
-            )
-            
-            print("✅ Successfully created new alert: \(newAlert.id)")
-            
-            // Step 2: Delete the original alert
-            do {
-                try await deleteAlertSmart(alertId: originalAlertId)
-                print("✅ Successfully deleted original alert: \(originalAlertId)")
-                
-                print("✅ Edit operation completed via create-then-delete strategy")
-                return newAlert
-                
-            } catch {
-                print("⚠️ Created new alert but failed to delete original: \(error)")
-                // We have a new alert created, but couldn't delete the old one
-                // Return the new alert anyway - user will have duplicate until they manually delete
-                print("⚠️ User now has both alerts - recommend manual cleanup")
-                return newAlert
-            }
-            
-        } catch {
-            print("❌ Alternative strategy failed: \(error)")
-            throw AlertNetworkError.serverError("Unable to update alert. The route \(origin) → \(destination) may already exist. Please try creating a new alert instead.")
-        }
-    }
     
     // Helper method for testing the API connection
     func testAPIConnection() async {
@@ -819,7 +719,6 @@ class AlertNetworkManager {
         }
     }
 }
-
 
 // MARK: - Supporting Models (keep existing)
 struct AlertsWrapper: Codable {

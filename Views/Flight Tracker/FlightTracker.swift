@@ -628,6 +628,7 @@ struct FlightTrackerScreen: View {
                             }
                         }
                     }
+                    .scrollIndicators(.hidden)
                     .padding(.horizontal, 20)
                 }
             } else if let error = scheduleError {
@@ -717,6 +718,7 @@ struct FlightTrackerScreen: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
             }
+            .scrollIndicators(.hidden)
         }
     }
     
@@ -965,6 +967,7 @@ struct FlightTrackerScreen: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .padding(.horizontal, 20)
         }
     }
@@ -996,6 +999,7 @@ struct FlightTrackerScreen: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .padding(.horizontal, 20)
         }
     }
@@ -1026,6 +1030,7 @@ struct FlightTrackerScreen: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .padding(.horizontal, 20)
         }
     }
@@ -1098,37 +1103,49 @@ struct FlightTrackerScreen: View {
     
     // Create a separate content view for reusability
     private func flightRowContent(_ flight: FlightInfo) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // UPDATED: Use airline IATA code from FlightInfo
-            AirlineLogoView(
-                        iataCode: flight.airlineIataCode ?? flight.flightNumber.airlineIataCode,
-                        fallbackImage: "FlightTrackLogo",
-                        size: 24
-                    )
+        HStack(alignment: .top, spacing: 10) {
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text(flight.flightNumber)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.black)
+            HStack{
+                // UPDATED: Use airline IATA code from FlightInfo
+                AirlineLogoView(
+                            iataCode: flight.airlineIataCode ?? flight.flightNumber.airlineIataCode,
+                            fallbackImage: "FlightTrackLogo",
+                            size: 24
+                        )
                 
-                Text(flight.airline)
-                    .font(.system(size: 14))
-                    .fontWeight(.semibold)
-                    .foregroundColor(.gray)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(flight.flightNumber)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.black)
+                    
+                    MarqueeText(text: flight.airline, font: .system(size: 14))
+                        .fontWeight(.semibold)
+                        .foregroundColor(.gray)
+                        .frame(height: 20) // Optional height
+
+                }
+                .frame(width: 70)
             }
             
-            Spacer()
             
-            VStack(alignment: .center, spacing: 2) {
+            Spacer(minLength: 12)
+            
+            VStack(alignment: .leading, spacing: 2) {
                 Text(flight.destination)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.black)
                 
-                Text(flight.destinationName)
-                    .font(.system(size: 12))
+//                Text(flight.destinationName)
+//                    .font(.system(size: 12))
+//                    .fontWeight(.semibold)
+//                    .foregroundColor(.gray)
+                
+                MarqueeText(text: flight.destinationName, font: .system(size: 14))
                     .fontWeight(.semibold)
                     .foregroundColor(.gray)
+                    .frame(height: 20)
             }
+//            .frame(width:45)
             
             Spacer()
             

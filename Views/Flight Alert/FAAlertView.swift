@@ -37,7 +37,7 @@ struct FAAlertView: View {
                 FAheader()
                 
                 // Main content area
-                ScrollView {
+                ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
                         HStack {
                             VStack(alignment: .leading) {

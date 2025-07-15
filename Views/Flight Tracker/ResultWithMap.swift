@@ -82,7 +82,7 @@ struct FlightDetailDesignScreen: View {
                     }
                 }
                 .overlay(
-                    GradientColor.FTHGradient      // ← your custom gradient
+                    GradientColor.FTHGradient
                         .blendMode(.overlay)
                 )
                 .overlay(
@@ -154,10 +154,11 @@ struct FlightDetailDesignScreen: View {
         }
         .sheet(isPresented: $showingBottomSheet) {
             bottomSheetContent()
-                .presentationDetents([.medium, .fraction(0.90)])
+                .presentationDetents([.medium, .fraction(0.95)])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.regularMaterial)
                 .interactiveDismissDisabled(true)
+            
         }
     }
     

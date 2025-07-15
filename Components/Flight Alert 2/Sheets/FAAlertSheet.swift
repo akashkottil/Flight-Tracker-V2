@@ -86,7 +86,7 @@ struct MyAlertsView: View {
                     }
                 } else {
                     // Alerts list with real data
-                    ScrollView {
+                    ScrollView (showsIndicators: false) {
                         LazyVStack(spacing: 16) {
                             // UPDATED: Use real alert data
                             ForEach(alerts) { alert in

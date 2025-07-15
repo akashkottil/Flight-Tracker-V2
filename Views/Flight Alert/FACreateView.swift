@@ -34,11 +34,37 @@ struct FACreate: View {
         VStack{
             Spacer()
             VStack(spacing: 30) {
+                HStack{
+                    HStack{
+                        HStack{
+                            Image("FAex")
+                                .frame(width: 16, height: 16)
+                            Text("What is alert?")
+                                .font(.system(size: 14))
+                                .fontWeight(.bold)
+                                .foregroundColor(Color("FABlue"))
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical,10)
+                        .background(Color("FABlue").opacity(0.1))
+                        .cornerRadius(30)
+                        
+                        Spacer()
+                    }
+//                    .padding()
+                    
+                }
+                .padding(.horizontal)
+                
+                Spacer()
                 Image("FALogoBlue")
-                Text("Let us know your departure airports. we'll customize the best flight deals for you!")
+                    .frame(width: 236, height: 120)
+                Text("Login to get access to the latest price drops on return flights")
                     .padding(.horizontal, 40)
                     .foregroundColor(.black.opacity(0.7))
                     .multilineTextAlignment(.center)
+                
+                Spacer()
                 Button(action: {
                     showLocationSheet = true
                 }) {
@@ -52,6 +78,7 @@ struct FACreate: View {
                         .shadow(color: .gray.opacity(0.3), radius: 5, x: 0, y: 4)
                 }
                 .padding(.horizontal, 30)
+                .padding(.vertical)
             }
             .sheet(isPresented: $showLocationSheet) {
                 // UPDATED: Pass the callback to FALocationSheet

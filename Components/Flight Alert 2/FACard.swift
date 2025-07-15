@@ -125,28 +125,48 @@ struct FACard: View {
             // UPDATED: Bottom section with real pricing data
             HStack {
                 HStack {
-                    Text(getDepartureDate())
-                        .font(.subheadline)
-                        .fontWeight(.light)
-                        .foregroundColor(.black)
+                    HStack{
+                        Text(getDepartureDate())
+                            .font(.system(size: 14))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.black)
+                        
+//                        vertical divider here
+                        Divider()
+                            .frame(width: 0.4, height: 20)
+                            .background(Color.black)
+                        Image("cardpassenger")
+                            .frame(width: 18, height: 18)
+                        Text("2")
+                            .font(.system(size: 14))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.black)
+                    }
+                    
                     
                     Spacer()
                     
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        // Show original price if we have price data
-                        if let originalPrice = getOriginalPrice() {
-                            Text(originalPrice)
-                                .font(.title2)
+                    VStack(alignment: .trailing){
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            // Show original price if we have price data
+                            if let originalPrice = getOriginalPrice() {
+                                Text(originalPrice)
+                                    .font(.system(size: 20))
+                                    .fontWeight(.bold)
+                                    .foregroundColor(Color("FAPriceCut"))
+                                    .strikethrough()
+                            }
+                            
+                            Text(getCurrentPrice())
+                                .font(.system(size: 20))
                                 .fontWeight(.bold)
-                                .foregroundColor(Color("FAPriceCut"))
-                                .strikethrough()
+                                .foregroundColor(.black)
                         }
-                        
-                        Text(getCurrentPrice())
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.black)
+                        Text("per person")
+                            .font(.system(size: 12))
+                            .fontWeight(.regular)
                     }
+                    
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)

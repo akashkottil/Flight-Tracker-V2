@@ -87,18 +87,26 @@ struct AlertScreen: View {
             VStack {
                 FAheader()
                 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("Today's price drop alerts")
-                                    .font(.system(size: 20, weight: .bold))
-                                Text("Real-time flight price monitoring")
-                                    .font(.system(size: 14, weight: .regular))
-                            }
-                            Spacer()
+                if alertsWithFlights.isEmpty{
+                    VStack{}
+                }else{
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text("Today's price drop alerts")
+                                .font(.system(size: 20, weight: .bold))
+                            Text("Real-time flight price monitoring")
+                                .font(.system(size: 14, weight: .regular))
                         }
-                        .padding(.horizontal, 20)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+
+                }
+                
+                
+                
+                ScrollView (showsIndicators: false) {
+                    VStack(spacing: 0) {
                         
                         // MAIN CONTENT: Show cards or NoAlert based on cheapest_flight
                         if shouldShowShimmerCards {
@@ -110,12 +118,12 @@ struct AlertScreen: View {
                             }
                         } else if alertsWithFlights.isEmpty {
                             // NEW: Show NoAlert when all alerts have null cheapest_flight
-                            VStack(spacing: 30) {
+                            VStack(spacing: 250) {
                                 Spacer()
                                 NoAlert()
                                 Spacer()
                             }
-                            .frame(minHeight: 300)
+                            .frame(maxHeight: .infinity)
                         } else {
                             // Show FACards only for alerts with cheapest_flight data
                             ForEach(alertsWithFlights) { alert in
@@ -125,7 +133,8 @@ struct AlertScreen: View {
                                         handleAlertDeleted(deletedAlert)
                                     }
                                 )
-                                .padding()
+                                .padding(.horizontal)
+                                .padding(.vertical,6)
                                 .id("alert-\(alert.id)")
                             }
                         }
