@@ -718,6 +718,94 @@ class AlertNetworkManager {
             print("❌ API test failed: \(error)")
         }
     }
+    
+    // MARK: - 🚧 TEMPORARY DEVELOPMENT METHOD 🚧
+        // TODO: REMOVE THIS METHOD AFTER DEVELOPMENT IS COMPLETE
+        
+        /// Fetches alerts and populates missing cheapest_flight data using temporary API
+        /// This method should be removed once the real API consistently returns flight data
+    func fetchUserAlertsWithTempData() async throws -> [AlertResponse] {
+            DevelopmentConfig.logTempFeature("Starting fetchUserAlertsWithTempData")
+            
+            // First, fetch alerts normally
+            let originalAlerts = try await fetchUserAlerts()
+            DevelopmentConfig.logTempFeature("Fetched \(originalAlerts.count) original alerts")
+            
+            // Check if temporary API should be used
+            guard DevelopmentConfig.shouldUseTempAPI() else {
+                DevelopmentConfig.logTempFeature("Temporary API disabled, returning original alerts")
+                return originalAlerts
+            }
+            
+            // Process alerts and add temporary flight data where needed
+            var enhancedAlerts: [AlertResponse] = []
+            
+            for alert in originalAlerts {
+                if alert.cheapest_flight == nil {
+                    DevelopmentConfig.logTempFeature("Alert \(alert.id) has no flight data, fetching temporary data")
+                    
+                    // Try to get temporary flight data
+                    let enhancedAlert = await enrichAlertWithTempData(alert)
+                    enhancedAlerts.append(enhancedAlert)
+                } else {
+                    DevelopmentConfig.logTempFeature("Alert \(alert.id) already has flight data")
+                    enhancedAlerts.append(alert)
+                }
+            }
+            
+            DevelopmentConfig.logTempFeature("Enhanced \(enhancedAlerts.count) alerts with temporary data")
+            return enhancedAlerts
+        }
+
+        
+        // MARK: - Private Helper Methods (TEMPORARY)
+        
+    private func enrichAlertWithTempData(_ alert: AlertResponse) async -> AlertResponse {
+            do {
+                // Make temporary API call
+                let tempResponse = try await TempFlightPriceService.shared.fetchTempFlightPrice(
+                    origin: alert.route.origin,
+                    destination: alert.route.destination
+                )
+                
+                // Get the cheapest result
+                guard let cheapestResult = tempResponse.results.min(by: { $0.price < $1.price }) else {
+                    DevelopmentConfig.logTempFeature("No temp results found for \(alert.route.origin) → \(alert.route.destination)")
+                    return alert
+                }
+                
+                // Convert to CheapestFlight
+                let tempCheapestFlight = TempFlightPriceService.shared.convertToCheapestFlight(cheapestResult)
+                
+                // Create enhanced alert with temporary data
+                let enhancedAlert = AlertResponse(
+                    id: alert.id,
+                    user: alert.user,
+                    route: alert.route,
+                    cheapest_flight: tempCheapestFlight,
+                    image_url: alert.image_url,
+                    target_price: alert.target_price,
+                    last_notified_price: calculateMockLastNotifiedPrice(currentPrice: tempCheapestFlight.price),
+                    created_at: alert.created_at,
+                    updated_at: alert.updated_at
+                )
+                
+                DevelopmentConfig.logTempFeature("Enhanced alert \(alert.id) with temp price: \(tempCheapestFlight.price)")
+                return enhancedAlert
+                
+            } catch {
+                DevelopmentConfig.logTempFeature("Failed to get temp data for alert \(alert.id): \(error)")
+                return alert
+            }
+        }
+        
+        private func calculateMockLastNotifiedPrice(currentPrice: Double) -> Double? {
+            // Add mock price drop for development visualization
+            return currentPrice + DevelopmentConfig.mockPriceDrop
+        }
+
+    
+    
 }
 
 // MARK: - Supporting Models (keep existing)
@@ -727,3 +815,5 @@ struct AlertsWrapper: Codable {
     let next: String?
     let previous: String?
 }
+
+

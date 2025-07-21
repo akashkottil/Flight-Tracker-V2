@@ -12,6 +12,10 @@ class FlightTrackNetworkManager {
     
     private init() {}
     
+// MARK: Mock data
+       var useMockData: Bool = true
+// MARK: mock ends
+    
     func searchAirports(query: String) async throws -> FlightTrackAirportResponse {
         let cacheKey = "airports_\(query.lowercased())"
         
@@ -188,7 +192,25 @@ class FlightTrackNetworkManager {
         }
     }
     
+//    MARK: Mock data
+    private func loadMockFlightDetail() throws -> FlightDetailResponse {
+        guard let url = Bundle.main.url(forResource: "Flight-in-air", withExtension: "json") else {
+            throw FlightTrackNetworkError.badRequest("Missing mock file: Flight-in-air.json")
+        }
+
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        return try decoder.decode(FlightDetailResponse.self, from: data)
+    }
+//    MARK: mock ends
+    
     func fetchFlightDetail(flightNumber: String, date: String) async throws -> FlightDetailResponse {
+//        MARK: mock data
+        if useMockData {
+                print("🧪 Using mock JSON for flight detail")
+                return try loadMockFlightDetail()
+            }
+// mock ends
         // Parse flight number to separate airline code and flight number
         let (airlineId, cleanFlightNumber) = parseFlightNumber(flightNumber)
         
@@ -322,7 +344,83 @@ class FlightTrackNetworkManager {
         }
     }
     
-    // COMPLETELY NEW PARSING METHOD - NO OLD CODE
+    
+    // Add this new method to FlightTrackNetworkManager class
+    func fetchFlightDetailWithSeparateComponents(
+        airlineCode: String?,
+        flightNumber: String,
+        date: String
+    ) async throws -> FlightDetailResponse {
+        
+        let (finalAirlineId, finalFlightNumber) = parseFlightComponents(
+            airlineCode: airlineCode,
+            flightNumber: flightNumber
+        )
+        
+        // Validate parsed components
+        guard !finalAirlineId.isEmpty && !finalFlightNumber.isEmpty else {
+            print("❌ Failed to parse flight components: airline=\(airlineCode ?? "nil"), flight=\(flightNumber)")
+            throw FlightTrackNetworkError.badRequest("Invalid flight number format")
+        }
+        
+        // Use existing fetchFlightDetail method with parsed components
+        let combinedFlightNumber = "\(finalAirlineId)\(finalFlightNumber)"
+        return try await fetchFlightDetail(flightNumber: combinedFlightNumber, date: date)
+    }
+
+    // Add this new parsing method to FlightTrackNetworkManager class
+    private func parseFlightComponents(
+        airlineCode: String?,
+        flightNumber: String
+    ) -> (airlineId: String, flightNumber: String) {
+        
+        let cleanFlightNumber = flightNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanAirlineCode = airlineCode?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        
+        print("🔍 PARSING COMPONENTS: airline='\(cleanAirlineCode ?? "nil")', flight='\(cleanFlightNumber)'")
+        
+        // SCENARIO 1: User provided separate airline code and flight number
+        if let airline = cleanAirlineCode, !airline.isEmpty {
+            
+            // Check if flight number is just digits (like "503")
+            if cleanFlightNumber.allSatisfy({ $0.isNumber }) {
+                print("✅ SEPARATE COMPONENTS: '\(airline)' + '\(cleanFlightNumber)'")
+                return (airlineId: airline, flightNumber: cleanFlightNumber)
+            }
+            
+            // Check if flight number already contains airline code
+            if cleanFlightNumber.hasPrefix(airline) {
+                let numberPart = String(cleanFlightNumber.dropFirst(airline.count))
+                if numberPart.allSatisfy({ $0.isNumber }) {
+                    print("✅ REDUNDANT AIRLINE CODE: '\(airline)' + '\(numberPart)'")
+                    return (airlineId: airline, flightNumber: numberPart)
+                }
+            }
+            
+            // Try to parse as complete flight number, but prefer provided airline
+            let (parsedAirline, parsedNumber) = parseFlightNumber(cleanFlightNumber)
+            if !parsedAirline.isEmpty && !parsedNumber.isEmpty {
+                // Use provided airline code if it matches, otherwise use parsed
+                let finalAirline = parsedAirline.uppercased() == airline ? airline : parsedAirline
+                print("✅ HYBRID PARSING: '\(finalAirline)' + '\(parsedNumber)'")
+                return (airlineId: finalAirline, flightNumber: parsedNumber)
+            }
+            
+            // Fallback: treat flight number as-is with provided airline
+            print("✅ FALLBACK WITH AIRLINE: '\(airline)' + '\(cleanFlightNumber)'")
+            return (airlineId: airline, flightNumber: cleanFlightNumber)
+        }
+        
+        // SCENARIO 2: No separate airline code provided, use existing parsing
+        let (parsedAirline, parsedNumber) = parseFlightNumber(cleanFlightNumber)
+        print("✅ STANDARD PARSING: '\(parsedAirline)' + '\(parsedNumber)'")
+        return (airlineId: parsedAirline, flightNumber: parsedNumber)
+    }
+
+    
+    
+    
+    // Update existing parseFlightNumber method to be more robust
     private func parseFlightNumber(_ flightNumber: String) -> (airlineId: String, flightNumber: String) {
         let input = flightNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         print("🔍 PARSING: '\(input)'")
@@ -330,15 +428,20 @@ class FlightTrackNetworkManager {
         // STEP 1: Handle space-separated format (e.g., "6E 703")
         if input.contains(" ") {
             let components = input.components(separatedBy: " ")
-            if components.count >= 2 && components[0].count == 2 {
-                print("✅ SPACE FORMAT: '\(components[0])' + '\(components[1])'")
-                return (airlineId: components[0], flightNumber: components[1])
+            if components.count >= 2 && components[0].count >= 2 {
+                let airline = components[0].uppercased()
+                let flight = components[1]
+                
+                if airline.contains(where: { $0.isLetter }) && flight.allSatisfy({ $0.isNumber }) {
+                    print("✅ SPACE FORMAT: '\(airline)' + '\(flight)'")
+                    return (airlineId: airline, flightNumber: flight)
+                }
             }
         }
         
         // STEP 2: Handle no-space format - ALWAYS split at position 2
         if input.count >= 3 {
-            let airline = String(input.prefix(2))
+            let airline = String(input.prefix(2)).uppercased()
             let flight = String(input.dropFirst(2))
             
             // Validate: airline must have at least 1 letter, flight must be all digits

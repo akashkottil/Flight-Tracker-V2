@@ -289,6 +289,79 @@ struct AlertScreen: View {
     
     // MARK: - API Loading Methods
     
+//    @MainActor
+//    private func performInitialLoad() async {
+//        print("🚀 Starting initial load...")
+//        isInitialLoading = true
+//        alertsError = nil
+//        showAddButton = false
+//        
+//        do {
+//            // NEW: Use the specific user endpoint
+//            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+//            updateAlertsAndCategorize(fetchedAlerts)
+//            hasEverLoaded = true
+//            
+//            // Save to cache
+//            saveAlertsToCache()
+//            
+//            print("✅ Initial load completed:")
+//            print("   Total alerts: \(alerts.count)")
+//            print("   With flights: \(alertsWithFlights.count)")
+//            print("   Without flights: \(alertsWithoutFlights.count)")
+//            
+//            // Show button with animation if we have alerts
+//            if !alerts.isEmpty {
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+//                    showAddButtonWithAnimation()
+//                }
+//            }
+//            
+//        } catch {
+//            alertsError = error.localizedDescription
+//            print("❌ Initial load failed: \(error)")
+//        }
+//        
+//        isInitialLoading = false
+//    }
+//    
+//    
+//    
+//    @MainActor
+//    private func performManualRefresh() async {
+//        print("🔄 Starting manual refresh...")
+//        
+//        // Only show shimmer if we have existing alerts
+//        if !alerts.isEmpty {
+//            isRefreshing = true
+//        }
+//        
+//        alertsError = nil
+//        
+//        do {
+//            // NEW: Use the specific user endpoint
+//            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+//            updateAlertsAndCategorize(fetchedAlerts)
+//            hasEverLoaded = true
+//            
+//            // Save to cache
+//            saveAlertsToCache()
+//            
+//            print("✅ Manual refresh completed:")
+//            print("   Total alerts: \(alerts.count)")
+//            print("   With flights: \(alertsWithFlights.count)")
+//            print("   Without flights: \(alertsWithoutFlights.count)")
+//            
+//        } catch {
+//            alertsError = error.localizedDescription
+//            print("❌ Manual refresh failed: \(error)")
+//        }
+//        
+//        isRefreshing = false
+//    }
+    
+// MARK: temp api call
+    
     @MainActor
     private func performInitialLoad() async {
         print("🚀 Starting initial load...")
@@ -297,8 +370,15 @@ struct AlertScreen: View {
         showAddButton = false
         
         do {
-            // NEW: Use the specific user endpoint
-            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+            // 🚧 TEMPORARY: Use temp API method during development
+            let fetchedAlerts: [AlertResponse]
+            if DevelopmentConfig.shouldUseTempAPI() {
+                DevelopmentConfig.logTempFeature("Using temporary API for initial load")
+                fetchedAlerts = try await alertNetworkManager.fetchUserAlertsWithTempData()
+            } else {
+                fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+            }
+            
             updateAlertsAndCategorize(fetchedAlerts)
             hasEverLoaded = true
             
@@ -324,7 +404,7 @@ struct AlertScreen: View {
         
         isInitialLoading = false
     }
-    
+
     @MainActor
     private func performManualRefresh() async {
         print("🔄 Starting manual refresh...")
@@ -337,8 +417,15 @@ struct AlertScreen: View {
         alertsError = nil
         
         do {
-            // NEW: Use the specific user endpoint
-            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+            // 🚧 TEMPORARY: Use temp API method during development
+            let fetchedAlerts: [AlertResponse]
+            if DevelopmentConfig.shouldUseTempAPI() {
+                DevelopmentConfig.logTempFeature("Using temporary API for manual refresh")
+                fetchedAlerts = try await alertNetworkManager.fetchUserAlertsWithTempData()
+            } else {
+                fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+            }
+            
             updateAlertsAndCategorize(fetchedAlerts)
             hasEverLoaded = true
             

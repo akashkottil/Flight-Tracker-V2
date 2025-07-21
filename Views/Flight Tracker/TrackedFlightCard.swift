@@ -115,42 +115,84 @@ struct TrackedFlightCard: View {
                 
                 // Flight path visualization
                 VStack(spacing: 4) {
-                    HStack{
-                        // Departure circle
+//                    HStack{
+//                        // Departure circle
+//                        Circle()
+//                          .stroke(Color.primary, lineWidth: 1)
+//                          .frame(width: 8, height: 8)
+//                        
+//                        Rectangle()
+//                          .fill(Color.primary)
+//                          .frame(width: 10, height: 1)
+//                          .padding(.top, 4)
+//                          .padding(.bottom, 4)
+//                        
+//                        HStack {
+//                            Text(duration)
+//                                .font(.system(size: 11))
+//                                .foregroundColor(.gray)
+//                                .padding(.vertical,3)
+//                        }
+//                        .frame(width: 70)
+//                        .background(Color.white)
+//                        .cornerRadius(8)
+//                        .overlay(
+//                            RoundedRectangle(cornerRadius: 8)
+//                                .stroke(Color.black, lineWidth: 1)
+//                        )
+//                        
+//                        Rectangle()
+//                          .fill(Color.primary)
+//                          .frame(width: 10, height: 1)
+//                          .padding(.top, 4)
+//                          .padding(.bottom, 4)
+//                        
+//                        Circle()
+//                          .stroke(Color.primary, lineWidth: 1)
+//                          .frame(width: 8, height: 8)
+//                    }
+                    
+                    HStack(spacing: 0) {
+                        // Left circle
                         Circle()
-                          .stroke(Color.primary, lineWidth: 1)
-                          .frame(width: 8, height: 8)
+                            .stroke(Color.black.opacity(0.6), lineWidth: 1)
+                            .frame(width: 6, height: 6) // Reduced from 6 to 5
                         
+                        // Left line segment
                         Rectangle()
-                          .fill(Color.primary)
-                          .frame(width: 10, height: 1)
-                          .padding(.top, 4)
-                          .padding(.bottom, 4)
+                            .fill(Color.black.opacity(0.6))
+                            .frame(width:12,height: 1)
+                           
                         
-                        HStack {
-                            Text(duration)
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                                .padding(.vertical,3)
-                        }
-                        .frame(width: 70)
-                        .background(Color.white)
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.black, lineWidth: 1)
-                        )
+                        // Date/Time capsule in the middle
+                        Text(duration)
+                            .font(.system(size: 11)) // Reduced from 12 to 11
+                            .foregroundColor(Color.black.opacity(0.6))
+                            .padding(.horizontal, 10) // Reduced from 8 to 6
+                            .padding(.vertical, 1) // Reduced from 2 to 1
+                            .background(
+                                Capsule()
+                                    .fill(Color.white)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.black.opacity(0.6), lineWidth: 0.5)
+                                    )
+                            )
+                            .padding(.horizontal,6)
                         
+                        // Right line segment
                         Rectangle()
-                          .fill(Color.primary)
-                          .frame(width: 10, height: 1)
-                          .padding(.top, 4)
-                          .padding(.bottom, 4)
+                            .fill(Color.black.opacity(0.6))
+                            .frame(width:12,height: 1)
+                            
                         
+                        // Right circle
                         Circle()
-                          .stroke(Color.primary, lineWidth: 1)
-                          .frame(width: 8, height: 8)
+                            .stroke(Color.black.opacity(0.6), lineWidth: 1)
+                            .frame(width: 6, height: 6) // Reduced from 6 to 5
                     }
+                    .frame(width: 156)
+
                     
                     Text(flightType)
                         .font(.system(size: 11, weight: .medium))

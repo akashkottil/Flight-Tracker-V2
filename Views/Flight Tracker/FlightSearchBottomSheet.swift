@@ -1,4 +1,4 @@
-// Enhanced FlightSearchBottomSheet.swift - Complete optimized version
+// Enhanced FlightSearchBottomSheet.swift - Complete optimized version with loading states
 import SwiftUI
 
 struct trackLocationSheet: View {
@@ -40,6 +40,12 @@ struct trackLocationSheet: View {
     @State private var arrivalAirports: [FlightTrackAirport] = []
     @State private var selectedDate: String?
     
+    // NEW: Loading and error states
+    @State private var isFlightDetailLoading = false
+    @State private var flightDetailError: String?
+    @State private var hasPerformedOriginSearch = false
+    @State private var hasPerformedDestinationSearch = false
+    
     var body: some View {
         VStack(spacing: 0) {
             
@@ -51,7 +57,7 @@ struct trackLocationSheet: View {
                     Image(systemName: "xmark")
                         .foregroundColor(.black)
                         .padding(10)
-                        .background(Circle().fill(Color.gray.opacity(0.1)))
+                        .fontWeight(.bold)
                 }
                 Spacer()
                 Text(getSheetTitle())
@@ -153,16 +159,182 @@ struct trackLocationSheet: View {
         
         if isComplete {
             // Trigger the completion handler
-            onSearchCompleted?(
-                searchType,
-                searchType == .flight ? trackedFlightNumber : nil,
-                trackedDepartureAirport,
-                trackedArrivalAirport,
-                selectedDate
+            handleTrackedSearchCompleted(
+                searchType: searchType,
+                flightNumber: searchType == .flight ? trackedFlightNumber : nil,
+                departureAirport: trackedDepartureAirport,
+                arrivalAirport: trackedArrivalAirport,
+                selectedDate: selectedDate
+            )
+        }
+    }
+    
+    // NEW: Enhanced handleTrackedSearchCompleted with loading states
+    private func handleTrackedSearchCompleted(
+        searchType: TrackedSearchType,
+        flightNumber: String?,
+        departureAirport: FlightTrackAirport?,
+        arrivalAirport: FlightTrackAirport?,
+        selectedDate: String?
+    ) {
+        
+        guard let selectedDate = selectedDate else {
+            print("❌ No date selected")
+            return
+        }
+        
+        let apiDate = convertDateToAPIFormat(selectedDate)
+        
+        // Handle flight number concatenation for tracked search
+        var finalFlightNumber: String?
+        if searchType == .flight {
+            finalFlightNumber = buildCompleteFlightNumber(
+                selectedAirline: getSelectedAirlineCode(),
+                enteredFlightNumber: flightNumber
+            )
+        }
+        
+        // NEW: Start loading state
+        withAnimation(.easeInOut(duration: 0.3)) {
+            isFlightDetailLoading = true
+            flightDetailError = nil
+        }
+        
+        Task {
+            await performTrackedSearchWithLoadingStates(
+                searchType: searchType,
+                flightNumber: finalFlightNumber,
+                departureAirport: departureAirport,
+                arrivalAirport: arrivalAirport,
+                date: apiDate
+            )
+        }
+    }
+    
+    // NEW: Enhanced performTrackedSearch with loading states
+    @MainActor
+    private func performTrackedSearchWithLoadingStates(
+        searchType: TrackedSearchType,
+        flightNumber: String?,
+        departureAirport: FlightTrackAirport?,
+        arrivalAirport: FlightTrackAirport?,
+        date: String
+    ) async {
+        
+        do {
+            if searchType == .flight, let flightNumber = flightNumber {
+                print("🔍 Calling flight detail API for: \(flightNumber), date: \(date)")
+                
+                // Use existing method with concatenated flight number
+                let response = try await FlightTrackNetworkManager.shared.fetchFlightDetail(
+                    flightNumber: flightNumber,
+                    date: date
+                )
+                
+                // Success - hide loading and navigate
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isFlightDetailLoading = false
+                    flightDetailError = nil
+                }
+                
+                // Small delay to show success state before navigation
+                try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                
+                // Navigate to flight detail screen
+                onSearchCompleted?(searchType, flightNumber, departureAirport, arrivalAirport, date)
+                
+            } else if searchType == .airport {
+                // Handle airport search (existing logic)
+                let departureId = departureAirport?.iataCode
+                let arrivalId = arrivalAirport?.iataCode
+                
+                print("🔍 Calling schedules API - dep: \(departureId ?? "nil"), arr: \(arrivalId ?? "nil"), date: \(date)")
+                let response = try await FlightTrackNetworkManager.shared.searchSchedules(
+                    departureId: departureId,
+                    arrivalId: arrivalId,
+                    date: date
+                )
+                
+                // Success - hide loading and navigate
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isFlightDetailLoading = false
+                    flightDetailError = nil
+                }
+                
+                // Navigate to schedule results
+                onSearchCompleted?(searchType, flightNumber, departureAirport, arrivalAirport, date)
+            }
+            
+        } catch {
+            // Error - show error state
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isFlightDetailLoading = false
+                flightDetailError = error.localizedDescription
+            }
+            
+            print("❌ Tracked search error: \(error)")
+        }
+    }
+    
+    // NEW: Build complete flight number from separate components
+    private func buildCompleteFlightNumber(
+        selectedAirline: String?,
+        enteredFlightNumber: String?
+    ) -> String? {
+        
+        guard let flightNumber = enteredFlightNumber?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !flightNumber.isEmpty else {
+            return nil
+        }
+        
+        // If user entered just numbers (like "503")
+        if flightNumber.allSatisfy({ $0.isNumber }) {
+            if let airline = selectedAirline?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+               !airline.isEmpty {
+                let combinedFlightNumber = "\(airline)\(flightNumber)"
+                print("✅ CONCATENATED: '\(airline)' + '\(flightNumber)' = '\(combinedFlightNumber)'")
+                return combinedFlightNumber
+            }
+        }
+        
+        // If user entered complete flight number (like "6E503"), use as-is
+        print("✅ USING AS-IS: '\(flightNumber)'")
+        return flightNumber
+    }
+    
+    // NEW: Get selected airline code from search text
+    private func getSelectedAirlineCode() -> String? {
+        // Extract airline code from the searchText if an airline was selected
+        if let selectedType = selectedSearchType, selectedType == .flight {
+            // searchText format would be "6E - IndiGo" after airline selection
+            let components = searchText.components(separatedBy: " - ")
+            if let firstComponent = components.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+               firstComponent.count >= 2 && firstComponent.count <= 3 {
+                return firstComponent.uppercased()
+            }
+        }
+        return nil
+    }
+    
+    // NEW: Retry method
+    private func retryFlightSearch(searchType: TrackedSearchType, selectedDate: String) {
+        let apiDate = convertDateToAPIFormat(selectedDate)
+        
+        if searchType == .flight {
+            let finalFlightNumber = buildCompleteFlightNumber(
+                selectedAirline: getSelectedAirlineCode(),
+                enteredFlightNumber: trackedFlightNumber
             )
             
-            // Close the sheet
-            isPresented = false
+            Task {
+                await performTrackedSearchWithLoadingStates(
+                    searchType: searchType,
+                    flightNumber: finalFlightNumber,
+                    departureAirport: trackedDepartureAirport,
+                    arrivalAirport: trackedArrivalAirport,
+                    date: apiDate
+                )
+            }
         }
     }
     
@@ -282,6 +454,8 @@ struct trackLocationSheet: View {
         arrivalAirportText = ""
         arrivalAirports = []
         selectedDate = nil
+        isFlightDetailLoading = false
+        flightDetailError = nil
         searchManager.clearResults()
     }
     
@@ -400,7 +574,7 @@ struct trackLocationSheet: View {
         }
     }
     
-    // UPDATED: Date selection view with calendar integration
+    // UPDATED: Date selection view with loading and error states
     private func dateSelectionView() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Select Date")
@@ -420,6 +594,69 @@ struct trackLocationSheet: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            
+            // NEW: Loading and Error States
+            if isFlightDetailLoading {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: Color.orange))
+                            .scaleEffect(0.8)
+                        
+                        Text("Fetching flight details...")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 20)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(12)
+                    .transition(.opacity.combined(with: .scale))
+                    Spacer()
+                }
+            }
+            
+            if let error = flightDetailError {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 20))
+                            .foregroundColor(.red)
+                        
+                        Text("Unable to find the flight details!")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                        
+                        Text(error)
+                            .font(.system(size: 12))
+                            .foregroundColor(.red.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                        
+                        Button("Try Again") {
+                            flightDetailError = nil
+                            if let searchType = trackedSearchType,
+                               let selectedDate = trackedSelectedDate {
+                                retryFlightSearch(searchType: searchType, selectedDate: selectedDate)
+                            }
+                        }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 20)
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(12)
+                    .transition(.opacity.combined(with: .scale))
+                    Spacer()
+                }
+            }
         }
     }
     
@@ -449,8 +686,11 @@ struct trackLocationSheet: View {
                         .fill(getSelectedDate() == "custom" ? Color.orange.opacity(0.1) : Color.clear)
                 )
         )
+        .opacity(isFlightDetailLoading ? 0.6 : 1.0)
         .onTapGesture {
-            showingTrackCalendar = true
+            if !isFlightDetailLoading {
+                showingTrackCalendar = true
+            }
         }
     }
     
@@ -461,6 +701,7 @@ struct trackLocationSheet: View {
         return formatter.string(from: date)
     }
     
+    // UPDATED: Date card with loading state handling
     private func dateCard(_ title: String, _ date: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -479,14 +720,17 @@ struct trackLocationSheet: View {
                         .fill(getSelectedDate() == value ? Color.orange.opacity(0.1) : Color.clear)
                 )
         )
+        .opacity(isFlightDetailLoading ? 0.6 : 1.0)
         .onTapGesture {
-            // ADDED: Enhanced date selection for tracked tab
-            if source == .trackedTab {
-                trackedSelectedDate = value
-                print("📅 Selected date for tracked: \(value)")
-            } else {
-                selectedDate = value
-                onDateSelected?(value)
+            // Disable interaction during loading
+            if !isFlightDetailLoading {
+                if source == .trackedTab {
+                    trackedSelectedDate = value
+                    print("📅 Selected date for tracked: \(value)")
+                } else {
+                    selectedDate = value
+                    onDateSelected?(value)
+                }
             }
         }
     }
@@ -497,6 +741,41 @@ struct trackLocationSheet: View {
         } else {
             return selectedDate
         }
+    }
+    
+    // UPDATED: Handle custom dates in API format conversion
+    private func convertDateToAPIFormat(_ dateSelection: String) -> String {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        switch dateSelection {
+        case "yesterday":
+            let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+            return formatDateForAPI(yesterday)
+        case "today":
+            return formatDateForAPI(today)
+        case "tomorrow":
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+            return formatDateForAPI(tomorrow)
+        case "dayafter":
+            let dayAfter = calendar.date(byAdding: .day, value: 2, to: today)!
+            return formatDateForAPI(dayAfter)
+        case "custom":
+            // ADDED: Handle custom date from calendar
+            if let customDate = selectedCustomDate {
+                return formatDateForAPI(customDate)
+            } else {
+                return formatDateForAPI(today)
+            }
+        default:
+            return formatDateForAPI(today)
+        }
+    }
+    
+    private func formatDateForAPI(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.string(from: date)
     }
     
     // MARK: - Error View
@@ -528,7 +807,7 @@ struct trackLocationSheet: View {
                 fallbackImage: "FlightTrackLogo",
                 size: 50
             )
-            .background(Color.green.opacity(0.1))
+            .background(Color.white)
             .cornerRadius(8)
             
             VStack(alignment: .leading, spacing: 4) {
@@ -543,8 +822,8 @@ struct trackLocationSheet: View {
             
             Spacer()
             
-            Image(systemName: "airplane")
-                .foregroundColor(.gray)
+//            Image(systemName: "airplane")
+//                .foregroundColor(.gray)
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
@@ -555,10 +834,10 @@ struct trackLocationSheet: View {
     private func airportRowView(_ airport: FlightTrackAirport) -> some View {
         HStack(spacing: 12) {
             Text(airport.iataCode)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 14, weight: .semibold))
                 .padding(8)
                 .frame(width: 50, height: 50)
-                .background(Color.blue.opacity(0.1))
+                .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
             
             VStack(alignment: .leading, spacing: 4) {
@@ -573,12 +852,12 @@ struct trackLocationSheet: View {
             
             Spacer()
             
-            Image(systemName: "location")
-                .foregroundColor(.gray)
+//            Image(systemName: "location")
+//                .foregroundColor(.gray)
         }
-        .padding(.horizontal)
+//        .padding(.horizontal)
         .padding(.vertical, 12)
-        .background(Color.gray.opacity(0.05))
+//        .background(Color.gray.opacity(0.05))
         .cornerRadius(12)
     }
     
@@ -675,9 +954,9 @@ struct trackLocationSheet: View {
                 }
                 
                 VStack(spacing: 8) {
-                    popularAirlineRow("6E", "IndiGo", "India")
-                    popularAirlineRow("AI", "Air India", "India")
-                    popularAirlineRow("SG", "SpiceJet", "India")
+//                    popularAirlineRow("vistara", "Vistara", "India")
+                    popularAirlineRow("SG", "Spice Jet", "India")
+                    popularAirlineRow("6E", "Indigo", "India")
                 }
             }
             
@@ -700,12 +979,11 @@ struct trackLocationSheet: View {
     
     private func popularAirlineRow(_ code: String, _ name: String, _ country: String) -> some View {
         HStack(spacing: 12) {
-            Text(code)
+            Image(code)
                 .font(.system(size: 14, weight: .bold))
-                .padding(8)
+                
                 .frame(width: 50, height: 50)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
+                
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -717,10 +995,7 @@ struct trackLocationSheet: View {
             
             Spacer()
         }
-        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(8)
         .onTapGesture {
             searchText = code
         }
@@ -729,10 +1004,10 @@ struct trackLocationSheet: View {
     private func popularAirportRow(_ code: String, _ name: String) -> some View {
         HStack(spacing: 12) {
             Text(code)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 14, weight: .semibold))
                 .padding(8)
                 .frame(width: 50, height: 50)
-                .background(Color.blue.opacity(0.1))
+                .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
             
             Text(name)
@@ -740,10 +1015,7 @@ struct trackLocationSheet: View {
             
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(8)
+        
         .onTapGesture {
             searchText = code
         }
@@ -802,7 +1074,7 @@ struct OptimizedAirlineRowView: View {
                     fallbackImage: "FlightTrackLogo",
                     size: 40
                 )
-                .background(Color.green.opacity(0.1))
+                .background(Color.white)
                 .cornerRadius(8)
                 
                 VStack(alignment: .leading, spacing: 4) {
@@ -819,12 +1091,12 @@ struct OptimizedAirlineRowView: View {
                 
                 Spacer()
                 
-                Image(systemName: "airplane")
-                    .foregroundColor(.gray)
+//                Image(systemName: "airplane")
+//                    .foregroundColor(.gray)
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
-            .background(Color.gray.opacity(0.05))
+//            .background(Color.gray.opacity(0.05))
             .cornerRadius(12)
         }
         .buttonStyle(PlainButtonStyle())
@@ -839,10 +1111,10 @@ struct OptimizedAirportRowView: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 Text(airport.iataCode)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 14, weight: .semibold))
                     .padding(8)
                     .frame(width: 50, height: 50)
-                    .background(Color.blue.opacity(0.1))
+                    .background(Color.gray.opacity(0.1))
                     .cornerRadius(8)
                 
                 VStack(alignment: .leading, spacing: 4) {
@@ -859,12 +1131,12 @@ struct OptimizedAirportRowView: View {
                 
                 Spacer()
                 
-                Image(systemName: "location")
-                    .foregroundColor(.gray)
+//                Image(systemName: "location")
+//                    .foregroundColor(.gray)
             }
-            .padding(.horizontal)
+//            .padding(.horizontal)
             .padding(.vertical, 12)
-            .background(Color.gray.opacity(0.05))
+//            .background(Color.gray.opacity(0.05))
             .cornerRadius(12)
         }
         .buttonStyle(PlainButtonStyle())

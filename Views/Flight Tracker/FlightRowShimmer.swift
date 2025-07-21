@@ -5,40 +5,26 @@ struct FlightRowShimmer: View {
     @State private var shimmerAnimation = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 10) {
+            
+            
             // Shimmering image
             Rectangle()
                 .foregroundColor(.gray.opacity(0.3))
-                .frame(width: 60, height: 60)
+                .frame(width: 30, height: 30)
                 .cornerRadius(8)
                 .shimmerEffect()
 
             VStack(alignment: .leading, spacing: 2) {
                 Rectangle()
                     .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 100, height: 16)
+                    .frame(width: 60, height: 16)
                     .cornerRadius(4)
                     .shimmerEffect()
 
                 Rectangle()
                     .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 80, height: 14)
-                    .cornerRadius(4)
-                    .shimmerEffect()
-            }
-
-            Spacer()
-
-            VStack(alignment: .center, spacing: 2) {
-                Rectangle()
-                    .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 100, height: 14)
-                    .cornerRadius(4)
-                    .shimmerEffect()
-
-                Rectangle()
-                    .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 80, height: 12)
+                    .frame(width: 50, height: 14)
                     .cornerRadius(4)
                     .shimmerEffect()
             }
@@ -48,13 +34,29 @@ struct FlightRowShimmer: View {
             VStack(alignment: .leading, spacing: 2) {
                 Rectangle()
                     .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 100, height: 14)
+                    .frame(width: 40, height: 14)
                     .cornerRadius(4)
                     .shimmerEffect()
 
                 Rectangle()
                     .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 80, height: 12)
+                    .frame(width: 50, height: 12)
+                    .cornerRadius(4)
+                    .shimmerEffect()
+            }
+
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 2) {
+                Rectangle()
+                    .foregroundColor(.gray.opacity(0.3))
+                    .frame(width: 60, height: 14)
+                    .cornerRadius(4)
+                    .shimmerEffect()
+
+                Rectangle()
+                    .foregroundColor(.gray.opacity(0.3))
+                    .frame(width: 50, height: 12)
                     .cornerRadius(4)
                     .shimmerEffect()
             }
@@ -64,14 +66,8 @@ struct FlightRowShimmer: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Rectangle()
                     .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 70, height: 16)
+                    .frame(width: 40, height: 16)
                     .cornerRadius(10)
-                    .shimmerEffect()
-
-                Rectangle()
-                    .foregroundColor(.gray.opacity(0.3))
-                    .frame(width: 60, height: 12)
-                    .cornerRadius(4)
                     .shimmerEffect()
             }
             .frame(width: 70, height: 34)

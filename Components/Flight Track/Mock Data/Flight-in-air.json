@@ -1,0 +1,142 @@
+{
+  "result": {
+    "great_circle_distance": {
+      "meter": 2780000,
+      "km": 2780.0,
+      "mile": 1727.5,
+      "nm": 1499.6,
+      "feet": 9120708
+    },
+    "departure": {
+      "airport": {
+        "iata_code": "COK",
+        "icao_code": "VOCI",
+        "name": "Cochin International Airport",
+        "country": "India",
+        "country_code": "IN",
+        "is_international": true,
+        "is_major": true,
+        "city": "Kochi",
+        "location": {
+          "lat": 10.1520,
+          "lng": 76.4019
+        },
+        "timezone": {
+          "timezone": "Asia/Kolkata",
+          "country_code": "IN",
+          "gmt": 5.5,
+          "dst": 0
+        }
+      },
+      "scheduled": {
+        "utc": "2025-07-21T11:30:00Z",
+        "local": "2025-07-21T17:00:00+05:30"
+      },
+      "estimated": {
+        "utc": "2025-07-21T11:35:00Z",
+        "local": "2025-07-21T17:05:00+05:30"
+      },
+      "actual": {
+        "utc": "2025-07-21T11:42:00Z",
+        "local": "2025-07-21T17:12:00+05:30"
+      },
+      "terminal": "3",
+      "gate": "B2",
+      "baggage_belt": "5"
+    },
+    "arrival": {
+      "airport": {
+        "iata_code": "DXB",
+        "icao_code": "OMDB",
+        "name": "Dubai International Airport",
+        "country": "United Arab Emirates",
+        "country_code": "AE",
+        "is_international": true,
+        "is_major": true,
+        "city": "Dubai",
+        "location": {
+          "lat": 25.2532,
+          "lng": 55.3657
+        },
+        "timezone": {
+          "timezone": "Asia/Dubai",
+          "country_code": "AE",
+          "gmt": 4.0,
+          "dst": 0
+        }
+      },
+      "scheduled": {
+        "utc": "2025-07-21T15:15:00Z",
+        "local": "2025-07-21T19:15:00+04:00"
+      },
+      "estimated": {
+        "utc": "2025-07-21T15:25:00Z",
+        "local": "2025-07-21T19:25:00+04:00"
+      },
+      "actual": null,
+      "terminal": "1",
+      "gate": "C12",
+      "baggage_belt": "6"
+    },
+    "last_updated": "2025-07-21T14:10:00Z",
+    "flight_iata": "EK531",
+    "call_sign": "UAE531",
+    "status": "en-route",
+    "codeshare_status": null,
+    "is_cargo": false,
+    "aircraft": {
+      "hex": "A6EQN1",
+      "reg_number": "A6-EQN",
+      "country": "United Arab Emirates",
+      "built": 2021,
+      "engine": "GE90-115B",
+      "engine_count": 2,
+      "model": "Boeing 777-300ER",
+      "manufacturer": "Boeing",
+      "msn": "65432",
+      "type": "Wide-body",
+      "category": "Passenger",
+      "line": "777"
+    },
+    "airline": {
+      "name": "Emirates",
+      "iata_code": "EK",
+      "icao_code": "UAE",
+      "is_international": true,
+      "website": "https://www.emirates.com",
+      "country": "United Arab Emirates",
+      "callsign": "EMIRATES",
+      "is_passenger": true,
+      "is_cargo": false,
+      "total_aircrafts": 250,
+      "average_fleet_age": 6.1,
+      "accidents_last_5y": 0,
+      "crashes_last_5y": 0
+    },
+    "current_position": {
+      "lat": 18.2150,
+      "lng": 64.8420,
+      "altitude": 35000,
+      "speed": 485,
+      "bearing": 315,
+      "heading": "Northwest",
+      "ground_speed": 485,
+      "vertical_rate": 0,
+      "squawk": "2000",
+      "timestamp": "2025-07-21T14:11:00Z"
+    },
+    "progress": {
+      "percentage": 67.5,
+      "distance_traveled_km": 1876.5,
+      "distance_remaining_km": 903.5,
+      "estimated_time_remaining": "01:52:00"
+    },
+    "weather": {
+      "conditions": "Clear",
+      "temperature": -45,
+      "wind_speed": 35,
+      "wind_direction": 270,
+      "visibility": "Unlimited"
+    }
+  }
+}
