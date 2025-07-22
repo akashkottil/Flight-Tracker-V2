@@ -11,6 +11,12 @@ struct AlertScreen: View {
     @State private var hasEverLoaded = false
     @State private var showAddButton = false
     
+    @State private var adultsCount = 2
+    @State private var childrenCount = 0
+    @State private var selectedCabinClass = "Economy"
+    @State private var childrenAges: [Int?] = []
+    @State private var showingPassengersSheet = false
+    
     // Network manager
     private let alertNetworkManager = AlertNetworkManager.shared
     
@@ -32,7 +38,10 @@ struct AlertScreen: View {
         return isRefreshing && !alerts.isEmpty
     }
     
+    
+    
     var body: some View {
+        
         Group {
             if shouldShowFullScreenLoading {
                 // Show full-screen loading on first load
@@ -51,6 +60,14 @@ struct AlertScreen: View {
                 // Fallback loading state
                 fullScreenLoadingView
             }
+        }
+        .sheet(isPresented: $showingPassengersSheet) {
+            PassengersAndClassSelector(
+                adultsCount: $adultsCount,
+                childrenCount: $childrenCount,
+                selectedClass: $selectedCabinClass,
+                childrenAges: $childrenAges
+            )
         }
         .onAppear {
             handleTabAppear()
@@ -85,7 +102,15 @@ struct AlertScreen: View {
                 .ignoresSafeArea()
             
             VStack {
-                FAheader()
+                FAheader(
+                    adultsCount: $adultsCount,
+                    childrenCount: $childrenCount,
+                    selectedCabinClass: $selectedCabinClass,
+                    childrenAges: $childrenAges,
+                    onPassengerTap: {
+                        showingPassengersSheet = true
+                    }
+                )
                 
                 if alertsWithFlights.isEmpty{
                     VStack{}
@@ -100,7 +125,7 @@ struct AlertScreen: View {
                         Spacer()
                     }
                     .padding(.horizontal, 20)
-
+                    
                 }
                 
                 
@@ -128,11 +153,25 @@ struct AlertScreen: View {
                             // Show FACards only for alerts with cheapest_flight data
                             ForEach(alertsWithFlights) { alert in
                                 FACard(
-                                    alertData: alert,
-                                    onDelete: { deletedAlert in
-                                        handleAlertDeleted(deletedAlert)
-                                    }
-                                )
+                                        alertData: alert,
+                                        onDelete: { deletedAlert in
+                                            handleAlertDeleted(deletedAlert)
+                                        },
+                                        onNavigateToSearch: { origin, destination, date, adults, children, cabinClass in
+                                            handleAlertSearchNavigation(
+                                                fromCode: origin,
+                                                toCode: destination,
+                                                date: date,
+                                                adults: adults,
+                                                children: children,
+                                                cabinClass: cabinClass,
+                                                alert: alert
+                                            )
+                                        },
+                                        adultsCount: $adultsCount,           // CHANGED: Pass binding with $
+                                        childrenCount: $childrenCount,       // CHANGED: Pass binding with $
+                                        selectedCabinClass: $selectedCabinClass 
+                                    )
                                 .padding(.horizontal)
                                 .padding(.vertical,6)
                                 .id("alert-\(alert.id)")
@@ -289,78 +328,78 @@ struct AlertScreen: View {
     
     // MARK: - API Loading Methods
     
-//    @MainActor
-//    private func performInitialLoad() async {
-//        print("🚀 Starting initial load...")
-//        isInitialLoading = true
-//        alertsError = nil
-//        showAddButton = false
-//        
-//        do {
-//            // NEW: Use the specific user endpoint
-//            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
-//            updateAlertsAndCategorize(fetchedAlerts)
-//            hasEverLoaded = true
-//            
-//            // Save to cache
-//            saveAlertsToCache()
-//            
-//            print("✅ Initial load completed:")
-//            print("   Total alerts: \(alerts.count)")
-//            print("   With flights: \(alertsWithFlights.count)")
-//            print("   Without flights: \(alertsWithoutFlights.count)")
-//            
-//            // Show button with animation if we have alerts
-//            if !alerts.isEmpty {
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-//                    showAddButtonWithAnimation()
-//                }
-//            }
-//            
-//        } catch {
-//            alertsError = error.localizedDescription
-//            print("❌ Initial load failed: \(error)")
-//        }
-//        
-//        isInitialLoading = false
-//    }
-//    
-//    
-//    
-//    @MainActor
-//    private func performManualRefresh() async {
-//        print("🔄 Starting manual refresh...")
-//        
-//        // Only show shimmer if we have existing alerts
-//        if !alerts.isEmpty {
-//            isRefreshing = true
-//        }
-//        
-//        alertsError = nil
-//        
-//        do {
-//            // NEW: Use the specific user endpoint
-//            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
-//            updateAlertsAndCategorize(fetchedAlerts)
-//            hasEverLoaded = true
-//            
-//            // Save to cache
-//            saveAlertsToCache()
-//            
-//            print("✅ Manual refresh completed:")
-//            print("   Total alerts: \(alerts.count)")
-//            print("   With flights: \(alertsWithFlights.count)")
-//            print("   Without flights: \(alertsWithoutFlights.count)")
-//            
-//        } catch {
-//            alertsError = error.localizedDescription
-//            print("❌ Manual refresh failed: \(error)")
-//        }
-//        
-//        isRefreshing = false
-//    }
+    //    @MainActor
+    //    private func performInitialLoad() async {
+    //        print("🚀 Starting initial load...")
+    //        isInitialLoading = true
+    //        alertsError = nil
+    //        showAddButton = false
+    //
+    //        do {
+    //            // NEW: Use the specific user endpoint
+    //            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+    //            updateAlertsAndCategorize(fetchedAlerts)
+    //            hasEverLoaded = true
+    //
+    //            // Save to cache
+    //            saveAlertsToCache()
+    //
+    //            print("✅ Initial load completed:")
+    //            print("   Total alerts: \(alerts.count)")
+    //            print("   With flights: \(alertsWithFlights.count)")
+    //            print("   Without flights: \(alertsWithoutFlights.count)")
+    //
+    //            // Show button with animation if we have alerts
+    //            if !alerts.isEmpty {
+    //                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+    //                    showAddButtonWithAnimation()
+    //                }
+    //            }
+    //
+    //        } catch {
+    //            alertsError = error.localizedDescription
+    //            print("❌ Initial load failed: \(error)")
+    //        }
+    //
+    //        isInitialLoading = false
+    //    }
+    //
+    //
+    //
+    //    @MainActor
+    //    private func performManualRefresh() async {
+    //        print("🔄 Starting manual refresh...")
+    //
+    //        // Only show shimmer if we have existing alerts
+    //        if !alerts.isEmpty {
+    //            isRefreshing = true
+    //        }
+    //
+    //        alertsError = nil
+    //
+    //        do {
+    //            // NEW: Use the specific user endpoint
+    //            let fetchedAlerts = try await alertNetworkManager.fetchUserAlerts()
+    //            updateAlertsAndCategorize(fetchedAlerts)
+    //            hasEverLoaded = true
+    //
+    //            // Save to cache
+    //            saveAlertsToCache()
+    //
+    //            print("✅ Manual refresh completed:")
+    //            print("   Total alerts: \(alerts.count)")
+    //            print("   With flights: \(alertsWithFlights.count)")
+    //            print("   Without flights: \(alertsWithoutFlights.count)")
+    //
+    //        } catch {
+    //            alertsError = error.localizedDescription
+    //            print("❌ Manual refresh failed: \(error)")
+    //        }
+    //
+    //        isRefreshing = false
+    //    }
     
-// MARK: temp api call
+    // MARK: temp api call
     
     @MainActor
     private func performInitialLoad() async {
@@ -404,7 +443,7 @@ struct AlertScreen: View {
         
         isInitialLoading = false
     }
-
+    
     @MainActor
     private func performManualRefresh() async {
         print("🔄 Starting manual refresh...")
@@ -537,8 +576,38 @@ struct AlertScreen: View {
             print("❌ Failed to cache alerts: \(error)")
         }
     }
+    
+    // MARK: - Alert Search Navigation Handler
+    
+    private func handleAlertSearchNavigation(
+        fromCode: String,
+        toCode: String,
+        date: Date,
+        adults: Int,
+        children: Int,
+        cabinClass: String,
+        alert: AlertResponse
+    ) {
+        print("🚨 Initiating search from alert: \(fromCode) → \(toCode)")
+        
+        // Use the extension method to navigate
+        SharedSearchDataStore.shared.executeSearchFromAlert(
+            fromLocationCode: fromCode,
+            fromLocationName: alert.route.origin_name,
+            toLocationCode: toCode,
+            toLocationName: alert.route.destination_name,
+            departureDate: date,
+            adultsCount: adults,
+            childrenCount: children,
+            selectedCabinClass: cabinClass
+        )
+        
+        // Navigate to explore tab
+        // Note: You may need to trigger tab navigation here depending on your navigation structure
+    }
+    
 }
 
-#Preview {
-    AlertScreen()
-}
+//#Preview {
+//    AlertScreen()
+//}

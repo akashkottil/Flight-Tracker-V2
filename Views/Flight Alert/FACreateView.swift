@@ -68,7 +68,7 @@ struct FACreate: View {
                 Button(action: {
                     showLocationSheet = true
                 }) {
-                    Text("Pick departure city")
+                    Text("Pick Locations")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .padding()
