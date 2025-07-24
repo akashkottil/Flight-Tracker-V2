@@ -1,193 +1,255 @@
 import SwiftUI
 
 struct FACard: View {
-    // ADDED: Optional alert data for displaying API response
     let alertData: AlertResponse?
-    
-    // ADDED: Callback for delete action
     let onDelete: ((AlertResponse) -> Void)?
+    let onNavigateToSearch: ((String, String, Date, Int, Int, String) -> Void)?
     
-    // ADDED: Default initializer for backward compatibility
-    init(alertData: AlertResponse? = nil, onDelete: ((AlertResponse) -> Void)? = nil) {
+    @Binding var adultsCount: Int
+    @Binding var childrenCount: Int
+    @Binding var selectedCabinClass: String
+    
+    // Remove the @State variables for passenger data since they're now passed in
+    
+    init(
+        alertData: AlertResponse? = nil,
+        onDelete: ((AlertResponse) -> Void)? = nil,
+        onNavigateToSearch: ((String, String, Date, Int, Int, String) -> Void)? = nil,
+        adultsCount: Binding<Int> = .constant(2),        // ✅ Binding<Int>
+        childrenCount: Binding<Int> = .constant(0),      // ✅ Binding<Int>
+        selectedCabinClass: Binding<String> = .constant("Economy") // ✅ Binding<String>
+    ) {
         self.alertData = alertData
         self.onDelete = onDelete
+        self.onNavigateToSearch = onNavigateToSearch
+        self._adultsCount = adultsCount          // ✅ Assign Binding to Binding
+        self._childrenCount = childrenCount      // ✅ Assign Binding to Binding
+        self._selectedCabinClass = selectedCabinClass // ✅ Assign Binding to Binding
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Top image section
-            ZStack(alignment: .topLeading) {
-                // UPDATED: Use image from API or default
-                if let imageUrl = alertData?.image_url, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Image("")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    }
-                    .frame(height: 120)
-                    .clipped()
-                } else {
-                    Image("FADemoImg")
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+        Button(action:{
+            handleSearchNavigation()
+        }){
+            VStack(spacing: 0) {
+                // Top image section
+                ZStack(alignment: .topLeading) {
+                    // UPDATED: Use image from API or default
+                    if let imageUrl = alertData?.image_url, let url = URL(string: imageUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Image("")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        }
                         .frame(height: 120)
                         .clipped()
-                }
-                
-                // UPDATED: Price drop badge with real data
-                HStack {
-                    VStack {
-                        HStack {
-                            Image("FAPriceTag")
-                                .frame(width: 12, height: 16)
-                            Text(getPriceDropText())
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color("FADarkGreen"))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    } else {
+                        Image("FADemoImg")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(height: 120)
+                            .clipped()
                     }
-                    Spacer()
+                    
+                    // UPDATED: Price drop badge with real data
+                    HStack {
+                        VStack {
+                            HStack {
+                                Image("FAPriceTag")
+                                    .frame(width: 12, height: 16)
+                                Text(getPriceDropText())
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color("FADarkGreen"))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                        Spacer()
+                    }
+                    .padding(8)
+                    
+                    
                 }
-                .padding(8)
-                
-                
-            }
-            .clipShape(
-                .rect(
-                    topLeadingRadius: 12,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 12
+                .clipShape(
+                    .rect(
+                        topLeadingRadius: 12,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 12
+                    )
                 )
-            )
-            
-            // UPDATED: Content section with real data
-            VStack(alignment: .leading) {
-                HStack {
-                    VStack(spacing: 0) {
-                        // Departure circle
-                        Circle()
-                            .stroke(Color.primary, lineWidth: 1)
-                            .frame(width: 8, height: 8)
-                        // Connecting line
-                        Rectangle()
-                            .fill(Color.primary)
-                            .frame(width: 1, height: 24)
-                            .padding(.top, 4)
-                            .padding(.bottom, 4)
-                        // Arrival circle
-                        Circle()
-                            .stroke(Color.primary, lineWidth: 1)
-                            .frame(width: 8, height: 8)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 20) {
-                        // UPDATED: Origin airport with real data
-                        HStack {
-                            Text(getOriginCode())
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.black)
-                            Text(getOriginName())
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                                .lineLimit(1)
+                
+                // UPDATED: Content section with real data
+                VStack(alignment: .leading) {
+                    HStack {
+                        VStack(spacing: 0) {
+                            // Departure circle
+                            Circle()
+                                .stroke(Color.primary, lineWidth: 1)
+                                .frame(width: 8, height: 8)
+                            // Connecting line
+                            Rectangle()
+                                .fill(Color.primary)
+                                .frame(width: 1, height: 24)
+                                .padding(.top, 4)
+                                .padding(.bottom, 4)
+                            // Arrival circle
+                            Circle()
+                                .stroke(Color.primary, lineWidth: 1)
+                                .frame(width: 8, height: 8)
                         }
                         
-                        // UPDATED: Destination airport with real data
-                        HStack {
-                            Text(getDestinationCode())
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.black)
-                            Text(getDestinationName())
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer()
-                }
-                .padding()
-            }
-            
-            Divider()
-                .padding(.vertical, 16)
-            
-            // UPDATED: Bottom section with real pricing data
-            HStack {
-                HStack {
-                    HStack{
-                        Text(getDepartureDate())
-                            .font(.system(size: 14))
-                            .fontWeight(.semibold)
-                            .foregroundColor(.black)
-                        
-//                        vertical divider here
-                        Divider()
-                            .frame(width: 0.4, height: 20)
-                            .background(Color.black)
-                        Image("cardpassenger")
-                            .frame(width: 18, height: 18)
-                        Text("2")
-                            .font(.system(size: 14))
-                            .fontWeight(.semibold)
-                            .foregroundColor(.black)
-                    }
-                    
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing){
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            // Show original price if we have price data
-                            if let originalPrice = getOriginalPrice() {
-                                Text(originalPrice)
-                                    .font(.system(size: 20))
-                                    .fontWeight(.bold)
-                                    .foregroundColor(Color("FAPriceCut"))
-                                    .strikethrough()
+                        VStack(alignment: .leading, spacing: 20) {
+                            // UPDATED: Origin airport with real data
+                            HStack {
+                                Text(getOriginCode())
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.black)
+                                Text(getOriginName())
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                    .lineLimit(1)
                             }
                             
-                            Text(getCurrentPrice())
-                                .font(.system(size: 20))
-                                .fontWeight(.bold)
+                            // UPDATED: Destination airport with real data
+                            HStack {
+                                Text(getDestinationCode())
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.black)
+                                Text(getDestinationName())
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                }
+                
+                Divider()
+                    .padding(.vertical, 16)
+                
+                // UPDATED: Bottom section with real pricing data
+                HStack {
+                    HStack {
+                        HStack{
+                            Text(getDepartureDate())
+                                .font(.system(size: 14))
+                                .fontWeight(.semibold)
+                                .foregroundColor(.black)
+                            
+                            //                        vertical divider here
+                            Divider()
+                                .frame(width: 0.4, height: 20)
+                                .background(Color.black)
+                            Image("cardpassenger")
+                                .frame(width: 18, height: 18)
+                            Text("\(adultsCount + childrenCount)")
+                                .font(.system(size: 14))
+                                .fontWeight(.semibold)
                                 .foregroundColor(.black)
                         }
-                        Text("per person")
-                            .font(.system(size: 12))
-                            .fontWeight(.regular)
+                        
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing){
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                // Show original price if we have price data
+                                if let originalPrice = getOriginalPrice() {
+                                    Text(originalPrice)
+                                        .font(.system(size: 20))
+                                        .fontWeight(.bold)
+                                        .foregroundColor(Color("FAPriceCut"))
+                                        .strikethrough()
+                                }
+                                
+                                Text(getCurrentPrice())
+                                    .font(.system(size: 20))
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.black)
+                            }
+                            Text("per person")
+                                .font(.system(size: 12))
+                                .fontWeight(.regular)
+                        }
+                        
                     }
-                    
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                .background(Color.white)
+                .clipShape(
+                    .rect(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 12,
+                        bottomTrailingRadius: 12,
+                        topTrailingRadius: 0
+                    )
+                )
             }
             .background(Color.white)
-            .clipShape(
-                .rect(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: 12,
-                    bottomTrailingRadius: 12,
-                    topTrailingRadius: 0
-                )
-            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         }
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+        .buttonStyle(PlainButtonStyle())
     }
     
-    // MARK: - Helper Methods for API Data
     
+    // MARK: - Alert Navigation Helpers
+    
+    private func handleSearchNavigation() {
+        guard let alert = alertData,
+              let flight = alert.cheapest_flight,
+              let departureDateTime = flight.outbound_departure_datetime else {
+            print("⚠️ Missing required data for search navigation")
+            return
+        }
+        
+        let departureDate = parseDepartureDate(departureDateTime) ?? Date()
+        
+        // UPDATED: Use the actual passenger data instead of hardcoded values
+        onNavigateToSearch?(
+            alert.route.origin,
+            alert.route.destination,
+            departureDate,
+            adultsCount,
+            childrenCount,
+            selectedCabinClass
+        )
+    }
+    
+    private func parseDepartureDate(_ dateString: String) -> Date? {
+        let formatter = DateFormatter()
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd"
+        ]
+        
+        for format in formats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+        }
+        
+        return nil
+    }
+    
+    
+    // MARK: - Helper Methods for API Data
     // UPDATED: Fixed price drop calculation using last_notified_price - current_price
     private func getPriceDropText() -> String {
         guard let alert = alertData,
@@ -248,7 +310,7 @@ struct FACard: View {
             // Fallback to alert creation date if no flight date
             return formatAlertDate(alert.created_at)
         }
-        return "Fri 13 Jun" // Default fallback
+        return "Nill" // Default fallback
     }
     
     private func getCurrentPrice() -> String {
