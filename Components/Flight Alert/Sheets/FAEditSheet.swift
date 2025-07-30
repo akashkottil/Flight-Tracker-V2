@@ -718,34 +718,34 @@ struct FAEditSheet: View {
 }
 
 // MARK: - Preview
-#Preview {
-    FAEditSheet(
-        alertToEdit: AlertResponse(
-            id: "sample-id",
-            user: AlertUserResponse(
-                id: "testId",
-                push_token: "token",
-                created_at: "2025-06-27T14:06:14.919574Z",
-                updated_at: "2025-06-27T14:06:14.919604Z"
-            ),
-            route: AlertRouteResponse(
-                id: 151,
-                origin: "COK",
-                destination: "DXB",
-                currency: "INR",
-                origin_name: "Kochi",
-                destination_name: "Dubai",
-                created_at: "2025-06-25T09:32:47.398234Z",
-                updated_at: "2025-06-27T14:06:14.932802Z"
-            ),
-            cheapest_flight: nil,
-            image_url: nil,
-            target_price: nil,
-            last_notified_price: nil,
-            created_at: "2025-06-27T14:06:14.947629Z",
-            updated_at: "2025-06-27T14:06:14.947659Z"
-        )
-    ) { updatedAlert in
-        print("Alert updated: \(updatedAlert.id)")
-    }
-}
+//#Preview {
+//    FAEditSheet(
+//        alertToEdit: AlertResponse(
+//            id: "sample-id",
+//            user: AlertUserResponse(
+//                id: "testId",
+//                push_token: "token",
+//                created_at: "2025-06-27T14:06:14.919574Z",
+//                updated_at: "2025-06-27T14:06:14.919604Z"
+//            ),
+//            route: AlertRouteResponse(
+//                id: 151,
+//                origin: "COK",
+//                destination: "DXB",
+//                currency: "INR",
+//                origin_name: "Kochi",
+//                destination_name: "Dubai",
+//                created_at: "2025-06-25T09:32:47.398234Z",
+//                updated_at: "2025-06-27T14:06:14.932802Z"
+//            ),
+//            cheapest_flight: nil,
+//            image_url: nil,
+//            target_price: nil,
+//            last_notified_price: nil,
+//            created_at: "2025-06-27T14:06:14.947629Z",
+//            updated_at: "2025-06-27T14:06:14.947659Z"
+//        )
+//    ) { updatedAlert in
+//        print("Alert updated: \(updatedAlert.id)")
+//    }
+//}

@@ -52,6 +52,11 @@ struct AlertResponse: Codable, Identifiable {
     let created_at: String
     let updated_at: String
     
+    
+    let stored_adults_count: Int?
+    let stored_children_count: Int?
+    let stored_cabin_class: String?
+    
     enum CodingKeys: String, CodingKey {
         case id, user, route
         case cheapest_flight
@@ -60,6 +65,9 @@ struct AlertResponse: Codable, Identifiable {
         case last_notified_price
         case created_at
         case updated_at
+        case stored_adults_count    // ADD THIS
+        case stored_children_count  // ADD THIS
+        case stored_cabin_class     // ADD THIS
     }
 }
 

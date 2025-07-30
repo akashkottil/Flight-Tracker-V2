@@ -573,13 +573,13 @@ struct FlightDetailScreen: View {
                 }
                 // Rest of your existing code...
                 .onAppear {
-                    FlightTrackNetworkManager.shared.useMockData = true
+//                    FlightTrackNetworkManager.shared.useMockData = true
                     Task {
                         await fetchFlightDetails()
                     }
                 }
                 .onDisappear {
-                    FlightTrackNetworkManager.shared.useMockData = false
+//                    FlightTrackNetworkManager.shared.useMockData = false
                     
                     if let flightDetail = flightDetail, let onFlightViewed = onFlightViewed {
                         addToRecentlyViewed(flightDetail)
@@ -640,7 +640,7 @@ struct FlightDetailScreen: View {
         ⏰ \(formatTime(flight.arrival.scheduled.local))
         
         ⏱️ Duration: \(calculateDuration(departure: flight.departure.scheduled.local, arrival: flight.arrival.scheduled.local))
-        📏 Distance: \(String(format: "%.0f", flight.greatCircleDistance.km)) km
+        
         
         📊 Status: \(flight.status ?? "Unknown")
         
@@ -2122,7 +2122,7 @@ struct ShimmerModifier: ViewModifier {
     }
 }
 
-#Preview {
-    FlightTrackNetworkManager.shared.useMockData = true
-    return FlightDetailScreen(flightNumber: "6E703", date: "20250618")
-}
+//#Preview {
+//    FlightTrackNetworkManager.shared.useMockData = true
+//    return FlightDetailScreen(flightNumber: "6E703", date: "20250618")
+//}

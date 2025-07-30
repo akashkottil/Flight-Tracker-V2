@@ -135,52 +135,52 @@ struct FFAAlertLogin: View {
 }
 
 
-#Preview {
-    FFAAlertLogin(
-        alertToDelete: AlertResponse(
-            id: "sample-id-1",
-            user: AlertUserResponse(
-                id: "testId",
-                push_token: "token",
-                created_at: "2025-06-27T14:06:14.919574Z",
-                updated_at: "2025-06-27T14:06:14.919604Z"
-            ),
-            route: AlertRouteResponse(
-                id: 151,
-                origin: "JFK",
-                destination: "COK",
-                currency: "USD",
-                origin_name: "John F. Kennedy International Airport",
-                destination_name: "Cochin International Airport",
-                created_at: "2025-06-25T09:32:47.398234Z",
-                updated_at: "2025-06-27T14:06:14.932802Z"
-            ),
-            cheapest_flight: CheapestFlight(
-                id: 13599,
-                price: 699,
-                price_category: "cheap",
-                outbound_departure_timestamp: 1752624000,
-                outbound_departure_datetime: "2025-07-16T00:00:00Z",
-                outbound_is_direct: true,
-                inbound_departure_timestamp: nil,
-                inbound_departure_datetime: nil,
-                inbound_is_direct: nil,
-                created_at: "2025-06-25T09:32:47.620603Z",
-                updated_at: "2025-06-25T09:32:47.620615Z",
-                route: 151
-            ),
-            image_url: "https://image.explore.lascadian.com/city_95673506.webp",
-            target_price: nil,
-            last_notified_price: nil,
-            created_at: "2025-06-27T14:06:14.947629Z",
-            updated_at: "2025-06-27T14:06:14.947659Z"
-        ),
-        onDelete: {
-            print("Delete button tapped")
-        },
-        onCancel: {
-            print("Cancel button tapped")
-        },
-        isDeleting: false
-    )
-}
+//#Preview {
+//    FFAAlertLogin(
+//        alertToDelete: AlertResponse(
+//            id: "sample-id-1",
+//            user: AlertUserResponse(
+//                id: "testId",
+//                push_token: "token",
+//                created_at: "2025-06-27T14:06:14.919574Z",
+//                updated_at: "2025-06-27T14:06:14.919604Z"
+//            ),
+//            route: AlertRouteResponse(
+//                id: 151,
+//                origin: "JFK",
+//                destination: "COK",
+//                currency: "USD",
+//                origin_name: "John F. Kennedy International Airport",
+//                destination_name: "Cochin International Airport",
+//                created_at: "2025-06-25T09:32:47.398234Z",
+//                updated_at: "2025-06-27T14:06:14.932802Z"
+//            ),
+//            cheapest_flight: CheapestFlight(
+//                id: 13599,
+//                price: 699,
+//                price_category: "cheap",
+//                outbound_departure_timestamp: 1752624000,
+//                outbound_departure_datetime: "2025-07-16T00:00:00Z",
+//                outbound_is_direct: true,
+//                inbound_departure_timestamp: nil,
+//                inbound_departure_datetime: nil,
+//                inbound_is_direct: nil,
+//                created_at: "2025-06-25T09:32:47.620603Z",
+//                updated_at: "2025-06-25T09:32:47.620615Z",
+//                route: 151
+//            ),
+//            image_url: "https://image.explore.lascadian.com/city_95673506.webp",
+//            target_price: nil,
+//            last_notified_price: nil,
+//            created_at: "2025-06-27T14:06:14.947629Z",
+//            updated_at: "2025-06-27T14:06:14.947659Z"
+//        ),
+//        onDelete: {
+//            print("Delete button tapped")
+//        },
+//        onCancel: {
+//            print("Cancel button tapped")
+//        },
+//        isDeleting: false
+//    )
+//}

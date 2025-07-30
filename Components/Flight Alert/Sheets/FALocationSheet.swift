@@ -717,7 +717,10 @@ struct FALocationSheet: View {
                     destination: destination.iataCode,
                     originName: origin.city,
                     destinationName: destination.city,
-                    currency: "INR"
+                    currency: "INR",
+                    adultsCount: 2,     // Use current passenger state when creating
+                                    childrenCount: 0,   // You'll need to pass these from the parent view
+                                    cabinClass: "Economy"
                 )
                 
                 await MainActor.run {

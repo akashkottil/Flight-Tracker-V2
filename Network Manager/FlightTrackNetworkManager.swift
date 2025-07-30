@@ -13,7 +13,7 @@ class FlightTrackNetworkManager {
     private init() {}
     
 // MARK: Mock data
-       var useMockData: Bool = true
+//       var useMockData: Bool = false
 // MARK: mock ends
     
     func searchAirports(query: String) async throws -> FlightTrackAirportResponse {
@@ -205,12 +205,12 @@ class FlightTrackNetworkManager {
 //    MARK: mock ends
     
     func fetchFlightDetail(flightNumber: String, date: String) async throws -> FlightDetailResponse {
-//        MARK: mock data
-        if useMockData {
-                print("🧪 Using mock JSON for flight detail")
-                return try loadMockFlightDetail()
-            }
-// mock ends
+////        MARK: mock data
+//        if useMockData {
+//                print("🧪 Using mock JSON for flight detail")
+//                return try loadMockFlightDetail()
+//            }
+//// mock ends
         // Parse flight number to separate airline code and flight number
         let (airlineId, cleanFlightNumber) = parseFlightNumber(flightNumber)
         

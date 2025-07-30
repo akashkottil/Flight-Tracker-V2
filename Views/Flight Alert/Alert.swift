@@ -153,30 +153,30 @@ struct AlertScreen: View {
                             // Show FACards only for alerts with cheapest_flight data
                             ForEach(alertsWithFlights) { alert in
                                 FACard(
-                                        alertData: alert,
-                                        onDelete: { deletedAlert in
-                                            handleAlertDeleted(deletedAlert)
-                                        },
-                                        onNavigateToSearch: { origin, destination, date, adults, children, cabinClass in
-                                            handleAlertSearchNavigation(
-                                                fromCode: origin,
-                                                toCode: destination,
-                                                date: date,
-                                                adults: adults,
-                                                children: children,
-                                                cabinClass: cabinClass,
-                                                alert: alert
-                                            )
-                                        },
-                                        adultsCount: $adultsCount,           // CHANGED: Pass binding with $
-                                        childrenCount: $childrenCount,       // CHANGED: Pass binding with $
-                                        selectedCabinClass: $selectedCabinClass 
-                                    )
+                                    alertData: alert,
+                                    onDelete: { deletedAlert in
+                                        handleAlertDeleted(deletedAlert)
+                                    },
+                                    onNavigateToSearch: { origin, destination, date, adults, children, cabinClass in
+                                        handleAlertSearchNavigation(
+                                            fromCode: origin,
+                                            toCode: destination,
+                                            date: date,
+                                            adults: adults,
+                                            children: children,
+                                            cabinClass: cabinClass,
+                                            alert: alert
+                                        )
+                                    },
+                                    // ✅ SOLUTION: Use stored values from alert or default constants
+                                    adultsCount: .constant(alert.stored_adults_count ?? 2),
+                                    childrenCount: .constant(alert.stored_children_count ?? 0),
+                                    selectedCabinClass: .constant(alert.stored_cabin_class ?? "Economy")
+                                )
                                 .padding(.horizontal)
                                 .padding(.vertical,6)
                                 .id("alert-\(alert.id)")
-                            }
-                        }
+                            }                        }
                         
                         Color.clear
                             .frame(height: 100)
@@ -534,16 +534,31 @@ struct AlertScreen: View {
         print("➕ Handling new alert creation: \(newAlert.id)")
         
         if !alerts.contains(where: { $0.id == newAlert.id }) {
-            let newAlerts = alerts + [newAlert]
+            // Create enhanced alert with current passenger data
+            let enhancedAlert = AlertResponse(
+                id: newAlert.id,
+                user: newAlert.user,
+                route: newAlert.route,
+                cheapest_flight: newAlert.cheapest_flight,
+                image_url: newAlert.image_url,
+                target_price: newAlert.target_price,
+                last_notified_price: newAlert.last_notified_price,
+                created_at: newAlert.created_at,
+                updated_at: newAlert.updated_at,
+                stored_adults_count: adultsCount,      // ✅ Store current values
+                stored_children_count: childrenCount,  // ✅ Store current values
+                stored_cabin_class: selectedCabinClass // ✅ Store current values
+            )
+            
+            let newAlerts = alerts + [enhancedAlert]
             updateAlertsAndCategorize(newAlerts)
             saveAlertsToCache()
             
-            // Show button if not already visible
             if !showAddButton {
                 showAddButtonWithAnimation()
             }
             
-            print("✅ New alert added. Total: \(alerts.count)")
+            print("✅ New alert added with passenger data. Total: \(alerts.count)")
         }
     }
     

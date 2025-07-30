@@ -238,7 +238,10 @@ class AlertNetworkManager {
         destination: String,
         originName: String,
         destinationName: String,
-        currency: String = "INR"
+        currency: String = "INR",
+        adultsCount: Int = 2,        // NEW: Add passenger parameters
+            childrenCount: Int = 0,      // NEW
+            cabinClass: String = "Economy"
     ) async throws -> AlertResponse {
         
         guard let url = URL(string: "\(baseURL)/api/alerts/") else {
@@ -347,6 +350,18 @@ class AlertNetworkManager {
                 throw AlertNetworkError.serverError("Network error: \(error.localizedDescription)")
             }
         }
+    }
+    
+    struct AlertRequestWithPassengers: Codable {
+        let user: AlertUser
+        let route: AlertRoute
+        let passengers: PassengerData
+    }
+    
+    struct PassengerData: Codable {
+        let adults_count: Int
+        let children_count: Int
+        let cabin_class: String
     }
     
     // MARK: - Delete Alert Methods
@@ -761,43 +776,47 @@ class AlertNetworkManager {
         // MARK: - Private Helper Methods (TEMPORARY)
         
     private func enrichAlertWithTempData(_ alert: AlertResponse) async -> AlertResponse {
-            do {
-                // Make temporary API call
-                let tempResponse = try await TempFlightPriceService.shared.fetchTempFlightPrice(
-                    origin: alert.route.origin,
-                    destination: alert.route.destination
-                )
-                
-                // Get the cheapest result
-                guard let cheapestResult = tempResponse.results.min(by: { $0.price < $1.price }) else {
-                    DevelopmentConfig.logTempFeature("No temp results found for \(alert.route.origin) → \(alert.route.destination)")
-                    return alert
-                }
-                
-                // Convert to CheapestFlight
-                let tempCheapestFlight = TempFlightPriceService.shared.convertToCheapestFlight(cheapestResult)
-                
-                // Create enhanced alert with temporary data
-                let enhancedAlert = AlertResponse(
-                    id: alert.id,
-                    user: alert.user,
-                    route: alert.route,
-                    cheapest_flight: tempCheapestFlight,
-                    image_url: alert.image_url,
-                    target_price: alert.target_price,
-                    last_notified_price: calculateMockLastNotifiedPrice(currentPrice: tempCheapestFlight.price),
-                    created_at: alert.created_at,
-                    updated_at: alert.updated_at
-                )
-                
-                DevelopmentConfig.logTempFeature("Enhanced alert \(alert.id) with temp price: \(tempCheapestFlight.price)")
-                return enhancedAlert
-                
-            } catch {
-                DevelopmentConfig.logTempFeature("Failed to get temp data for alert \(alert.id): \(error)")
+        do {
+            // Make temporary API call
+            let tempResponse = try await TempFlightPriceService.shared.fetchTempFlightPrice(
+                origin: alert.route.origin,
+                destination: alert.route.destination
+            )
+            
+            // Get the cheapest result
+            guard let cheapestResult = tempResponse.results.min(by: { $0.price < $1.price }) else {
+                DevelopmentConfig.logTempFeature("No temp results found for \(alert.route.origin) → \(alert.route.destination)")
                 return alert
             }
+            
+            // Convert to CheapestFlight
+            let tempCheapestFlight = TempFlightPriceService.shared.convertToCheapestFlight(cheapestResult)
+            
+            // Create enhanced alert with temporary data
+            let enhancedAlert = AlertResponse(
+                id: alert.id,
+                user: alert.user,
+                route: alert.route,
+                cheapest_flight: tempCheapestFlight,
+                image_url: alert.image_url,
+                target_price: alert.target_price,
+                last_notified_price: calculateMockLastNotifiedPrice(currentPrice: tempCheapestFlight.price),
+                created_at: alert.created_at,
+                updated_at: alert.updated_at,
+                // ADD: Include the passenger fields from the original alert
+                stored_adults_count: alert.stored_adults_count,
+                stored_children_count: alert.stored_children_count,
+                stored_cabin_class: alert.stored_cabin_class
+            )
+            
+            DevelopmentConfig.logTempFeature("Enhanced alert \(alert.id) with temp price: \(tempCheapestFlight.price)")
+            return enhancedAlert
+            
+        } catch {
+            DevelopmentConfig.logTempFeature("Failed to get temp data for alert \(alert.id): \(error)")
+            return alert
         }
+    }
         
         private func calculateMockLastNotifiedPrice(currentPrice: Double) -> Double? {
             // Add mock price drop for development visualization

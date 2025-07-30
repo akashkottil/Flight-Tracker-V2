@@ -189,10 +189,10 @@ struct FlightDetailResponse: Codable {
 
 // FIXED: Made more fields optional based on swagger documentation
 struct FlightDetail: Codable {
-    let greatCircleDistance: GreatCircleDistance
+    let greatCircleDistance: GreatCircleDistance?
     let departure: FlightLocation
     let arrival: FlightLocation
-    let lastUpdated: String
+    let lastUpdated: String?
     let flightIata: String
     let callSign: String?
     let status: String?             // FIXED: x-nullable: true
