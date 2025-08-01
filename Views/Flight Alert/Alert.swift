@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct AlertScreen: View {
     // State management for the new workflow
@@ -497,6 +498,49 @@ struct AlertScreen: View {
         print("   Total: \(alerts.count)")
         print("   With flights: \(alertsWithFlights.count)")
         print("   Without flights: \(alertsWithoutFlights.count)")
+        
+        // Preload alert images to prevent flickering
+        preloadAlertImages()
+    }
+    
+    // MARK: - Image Preloading
+    
+    private func preloadAlertImages() {
+        // Start a background task to preload all alert images
+        Task.detached(priority: .userInitiated) {
+            print("🖼️ Starting preload of \(self.alerts.count) alert images")
+            
+            for alert in self.alerts {
+                if let imageUrl = alert.image_url, let url = URL(string: imageUrl) {
+                    // Check if image is already cached
+                    if alert.getCachedImage() != nil {
+                        print("✅ Image for alert \(alert.id) already cached")
+                        continue
+                    }
+                    
+                    // Check global image cache
+                    if ImageCache.shared.image(forKey: imageUrl) != nil {
+                        print("✅ Image for alert \(alert.id) found in global cache")
+                        continue
+                    }
+                    
+                    // Load and cache the image
+                    do {
+                        let (data, _) = try await URLSession.shared.data(from: url)
+                        if let image = UIImage(data: data) {
+                            // Cache in both places
+                            ImageCache.shared.setImage(image, forKey: imageUrl)
+                            alert.cacheImage(image)
+                            print("✅ Preloaded image for alert \(alert.id)")
+                        }
+                    } catch {
+                        print("❌ Failed to preload image for alert \(alert.id): \(error)")
+                    }
+                }
+            }
+            
+            print("🖼️ Completed preloading alert images")
+        }
     }
     
     // MARK: - Button Animation

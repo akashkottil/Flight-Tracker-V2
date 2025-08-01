@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct FACard: View {
     let alertData: AlertResponse?
@@ -34,14 +35,10 @@ struct FACard: View {
             VStack(spacing: 0) {
                 // Top image section
                 ZStack(alignment: .topLeading) {
-                    // UPDATED: Use image from API or default
-                    if let imageUrl = alertData?.image_url, let url = URL(string: imageUrl) {
-                        AsyncImage(url: url) { image in
+                    // UPDATED: Use CachedAlertImage to prevent flickering
+                    if alertData?.image_url != nil {
+                        CachedAlertImage(alertData: alertData) { image in
                             image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Image("")
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                         }

@@ -57,7 +57,7 @@ struct CurvedFlightMapView: UIViewRepresentable {
         }
 
         func updateFlightProgress(_ progress: Double) {
-            guard let mapView = mapView else { return }
+            guard mapView != nil else { return }
             updateFlightIcon(progress: progress)
             updateTraveledPath(progress: progress)
         }

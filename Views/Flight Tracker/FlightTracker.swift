@@ -174,7 +174,9 @@ struct FlightTrackerScreen: View {
                 TrackedDetailsScreen(
                     flightDetail: nil,
                     scheduleResults: trackedScheduleResults,
-                    searchType: .airport
+                    searchType: .airport,
+                    departureAirport: trackedDepartureAirport,
+                    arrivalAirport: trackedArrivalAirport
                 )
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),

@@ -15,6 +15,8 @@ struct TrackedDetailsScreen: View {
     let flightDetail: FlightDetail?
     let scheduleResults: [ScheduleResult]
     let searchType: TrackedSearchResultType
+    let departureAirport: FlightTrackAirport?
+    let arrivalAirport: FlightTrackAirport?
     
     // Animation states
     @State private var isAppearing = false
@@ -24,6 +26,8 @@ struct TrackedDetailsScreen: View {
     private var fromText: String {
         if let flightDetail = flightDetail {
             return flightDetail.departure.airport.iataCode
+        } else if let depAirport = departureAirport {
+            return depAirport.iataCode
         } else if let firstFlight = scheduleResults.first {
             // Handle optional airport field
             return firstFlight.airport?.iataCode ?? "DEP"
@@ -35,6 +39,8 @@ struct TrackedDetailsScreen: View {
     private var toText: String {
         if let flightDetail = flightDetail {
             return flightDetail.arrival.airport.iataCode
+        } else if let arrAirport = arrivalAirport {
+            return arrAirport.iataCode
         } else if !scheduleResults.isEmpty {
             return "Flights"
         } else {
@@ -116,7 +122,7 @@ struct TrackedDetailsScreen: View {
                                 flightNumber: scheduleResults[index].flightNumber,
                                 status: scheduleResults[index].status.capitalized,
                                 departureTime: formatScheduleTime(scheduleResults[index].departureTime),
-                                departureAirport: "DEP", // You might want to add departure airport to ScheduleResult
+                                departureAirport: departureAirport?.iataCode ?? "DEP", // Use departure airport from props
                                 departureDate: formatScheduleDate(scheduleResults[index].departureTime),
                                 arrivalTime: formatScheduleTime(scheduleResults[index].arrivalTime),
                                 arrivalAirport: scheduleResults[index].airport?.iataCode ?? "ARR",
@@ -344,13 +350,17 @@ extension TrackedDetailsScreen {
         self.flightDetail = flightDetail
         self.scheduleResults = []
         self.searchType = .flight
+        self.departureAirport = nil
+        self.arrivalAirport = nil
     }
     
     // Convenience initializer for schedule results only
-    init(withScheduleResults scheduleResults: [ScheduleResult]) {
+    init(withScheduleResults scheduleResults: [ScheduleResult], departureAirport: FlightTrackAirport? = nil, arrivalAirport: FlightTrackAirport? = nil) {
         self.flightDetail = nil
         self.scheduleResults = scheduleResults
         self.searchType = .airport
+        self.departureAirport = departureAirport
+        self.arrivalAirport = arrivalAirport
     }
 }
 
@@ -361,7 +371,9 @@ struct TrackedDetailsScreen_Previews: PreviewProvider {
         TrackedDetailsScreen(
             flightDetail: nil,
             scheduleResults: [],
-            searchType: .flight
+            searchType: .flight,
+            departureAirport: nil,
+            arrivalAirport: nil
         )
     }
 }

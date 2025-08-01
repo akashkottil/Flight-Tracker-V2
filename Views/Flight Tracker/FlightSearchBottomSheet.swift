@@ -116,28 +116,29 @@ struct trackLocationSheet: View {
             primarySearchField()
             
             // Show search results if available
-            // OPTIMIZED: Use search manager state
             if searchManager.isLoading {
                 loadingView()
-            } else if !searchText.isEmpty && (!searchManager.searchResults.airports.isEmpty || !searchManager.searchResults.airlines.isEmpty) {
+            } else if !searchText.isEmpty &&
+                        (!searchManager.searchResults.airports.isEmpty || !searchManager.searchResults.airlines.isEmpty) {
                 searchResultsView()
             } else if let error = searchManager.errorMessage {
                 errorView(error)
             } else if searchText.isEmpty {
                 defaultTrackedContent()
             }
-            
-            // Show additional fields based on selection - MODIFIED for progressive display
+
+            // Show additional fields based on selection
             if let searchType = selectedSearchType {
                 additionalFieldsView(for: searchType)
             }
-            
-            // ADDED: Auto-check completion when all fields are filled
-            if source == .trackedTab {
-                let _ = checkTrackedCompletion()
-            }
         }
+        .onChange(of: trackedFlightNumber) { checkTrackedCompletion() }
+        .onChange(of: trackedDepartureAirport) {  checkTrackedCompletion() }
+        .onChange(of: trackedArrivalAirport) { checkTrackedCompletion() }
+        .onChange(of: trackedSelectedDate) { checkTrackedCompletion() }
+        .onChange(of: trackedSearchType) { checkTrackedCompletion() }
     }
+
     
     // ADDED: Check if tracked search is complete and trigger API call
     private func checkTrackedCompletion() {
@@ -240,6 +241,12 @@ struct trackLocationSheet: View {
                 // Small delay to show success state before navigation
                 try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
                 
+                // Dismiss the sheet before navigating
+                isPresented = false
+                
+                // Small delay to ensure sheet dismissal animation starts
+                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                
                 // Navigate to flight detail screen
                 onSearchCompleted?(searchType, flightNumber, departureAirport, arrivalAirport, date)
                 
@@ -260,6 +267,15 @@ struct trackLocationSheet: View {
                     isFlightDetailLoading = false
                     flightDetailError = nil
                 }
+                
+                // Small delay to show success state before navigation
+                try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                
+                // Dismiss the sheet before navigating
+                isPresented = false
+                
+                // Small delay to ensure sheet dismissal animation starts
+                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 
                 // Navigate to schedule results
                 onSearchCompleted?(searchType, flightNumber, departureAirport, arrivalAirport, date)
@@ -343,6 +359,8 @@ struct trackLocationSheet: View {
             HStack {
                 TextField("Enter flight or airport", text: $searchText)
                     .padding()
+                    .autocorrectionDisabled(true)
+                    .textInputAutocapitalization(.never)
                     .onChange(of: searchText) { newValue in
                         // OPTIMIZED: Use debounced search
                         searchManager.performSearch(
@@ -493,6 +511,8 @@ struct trackLocationSheet: View {
             HStack {
                 TextField("Enter flight number (e.g., 6E 123)", text: $trackedFlightNumber)
                     .padding()
+                    .autocorrectionDisabled(true)
+                    .textInputAutocapitalization(.never)
                     .onChange(of: trackedFlightNumber) { newValue in
                         // ADDED: Notify parent about flight number entry
                         onFlightNumberEntered?(newValue)
@@ -520,6 +540,8 @@ struct trackLocationSheet: View {
             HStack {
                 TextField("Enter arrival airport", text: $arrivalAirportText)
                     .padding()
+                    .autocorrectionDisabled(true)
+                    .textInputAutocapitalization(.never)
                     .onChange(of: arrivalAirportText) { newValue in
                         // Search for arrival airports
                         if newValue.count >= 2 {
@@ -879,6 +901,8 @@ struct trackLocationSheet: View {
         HStack {
             TextField(getAirportSearchPlaceholder(), text: $searchText)
                 .padding()
+                .autocorrectionDisabled(true)
+                .textInputAutocapitalization(.never)
                 .onChange(of: searchText) { newValue in
                     searchManager.performSearch(query: newValue, shouldPerformMixed: false)
                 }

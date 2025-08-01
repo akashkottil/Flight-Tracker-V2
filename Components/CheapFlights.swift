@@ -179,8 +179,8 @@ struct OriginalStyleCheapFlightCard: View {
     
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Dynamic image with FIXED frame and consistent sizing using CachedAsyncImage
-            CachedAsyncImage(
+            // Dynamic image with FIXED frame and consistent sizing using GenericCachedAsyncImage
+            GenericCachedAsyncImage(
                 url: URL(string: "https://image.explore.lascadian.com/\(imageType)_\(destination.location.entityId).webp")
             ) { image in
                 image

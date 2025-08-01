@@ -673,7 +673,8 @@ struct FlightDetailScreen: View {
     var body: some View {
         NavigationView {
                 GeometryReader { geometry in
-                    ZStack(alignment: .top) { // Add top alignment to ZStack
+                    ZStack(alignment: .top) {
+                        // Always show the map view with animation
                         if let departure = departureAnnotation?.coordinate,
                            let arrival = arrivalAnnotation?.coordinate {
                             SwiftUIFlightMapView(
@@ -684,14 +685,21 @@ struct FlightDetailScreen: View {
                                 pathAnimationProgress: animatedPathProgress,
                                 showFlightPath: showFlightPath
                             )
-                            .frame(height: geometry.size.height * 0.8) // Limit to 80% of screen height
-                            .frame(maxWidth: .infinity) // Keep full width
-                            .clipped() // Clip any overflow
-                        } else {
+                            .frame(height: geometry.size.height * 0.8)
+                            .frame(maxWidth: .infinity)
+                            .clipped()
+                            .opacity(showMap ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.5), value: showMap)
+                        }
+                        
+                        // Loading view that fades out when map is ready
+                        if !showMap {
                             MapShimmerView()
-                                .frame(height: geometry.size.height * 0.8) // Same height limit for shimmer
+                                .frame(height: geometry.size.height * 0.8)
                                 .frame(maxWidth: .infinity)
                                 .clipped()
+                                .opacity(showMap ? 0 : 1)
+                                .animation(.easeInOut(duration: 0.5), value: showMap)
                         }
 
                         // Gradient overlay - also limit to same height
@@ -700,6 +708,8 @@ struct FlightDetailScreen: View {
                             .frame(maxWidth: .infinity)
                             .blendMode(.overlay)
                             .allowsHitTesting(false)
+                            .opacity(showMap ? 1 : 0.5)
+                            .animation(.easeInOut(duration: 0.5), value: showMap)
                     }
                     .ignoresSafeArea(.all, edges: .top) // Move ignoresSafeArea to the ZStack level
                 }
@@ -760,12 +770,15 @@ struct FlightDetailScreen: View {
                 .onChange(of: flightDetail?.flightIata) { _ in
                     if let flight = flightDetail {
                         setupMapData(for: flight)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            withAnimation(.easeInOut(duration: 0.6)) {
+                        // First prepare the map data
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            // Then animate the map in
+                            withAnimation(.easeInOut(duration: 0.5)) {
                                 showMap = true
                             }
                             
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            // Start the flight path animation after a short delay
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 animateFlightPath()
                             }
                         }
@@ -829,8 +842,7 @@ struct FlightDetailScreen: View {
         ScrollView {
             VStack(spacing: 16) {
                 if isLoading {
-                    ProgressView("Loading flight details...")
-                        .padding()
+                    FlightDetailShimmerView()
                 } else if let error = error {
                     errorView(error)
                 } else if let flightDetail = flightDetail {
