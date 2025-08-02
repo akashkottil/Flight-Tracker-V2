@@ -76,11 +76,7 @@ struct AboutDestination: View {
             } else if let weather = weatherState.currentWeather {
                 // Dynamic weather icon based on condition
                 if weather.current.weatherCondition.lowercased().contains("cloud") {
-                    Image(weather.current.weatherIcon)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .frame(width: 50, height: 50)
-                                        .foregroundColor(.white)
+                    Image("Cloud") // Use existing cloud image
                 } else {
                     // Use SF Symbol for other conditions
                     Image(systemName: weather.current.weatherIcon)

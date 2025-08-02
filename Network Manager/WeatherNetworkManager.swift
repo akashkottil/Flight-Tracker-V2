@@ -45,32 +45,23 @@ class WeatherNetworkManager {
         
         print("🌐 Weather API URL: \(url)")
         
-        // Declare data outside the do block so it's accessible in catch blocks
-        let data: Data
-        let response: URLResponse
-        
         do {
-            (data, response) = try await URLSession.shared.data(from: url)
-        } catch {
-            print("❌ Weather network error: \(error)")
-            throw WeatherError.networkError(error)
-        }
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw WeatherError.invalidResponse
-        }
-        
-        print("📡 Weather API Response Status: \(httpResponse.statusCode)")
-        
-        guard 200...299 ~= httpResponse.statusCode else {
-            throw WeatherError.networkError(NSError(domain: "WeatherAPI", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"]))
-        }
-        
-        guard !data.isEmpty else {
-            throw WeatherError.noData
-        }
-        
-        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw WeatherError.invalidResponse
+            }
+            
+            print("📡 Weather API Response Status: \(httpResponse.statusCode)")
+            
+            guard 200...299 ~= httpResponse.statusCode else {
+                throw WeatherError.networkError(NSError(domain: "WeatherAPI", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"]))
+            }
+            
+            guard !data.isEmpty else {
+                throw WeatherError.noData
+            }
+            
             // Parse the response
             let decoder = JSONDecoder()
             let weatherResponse = try decoder.decode(WeatherResponse.self, from: data)
@@ -89,14 +80,13 @@ class WeatherNetworkManager {
             
         } catch let decodingError as DecodingError {
             print("❌ Weather decoding error: \(decodingError)")
-            // Now data is accessible here
             if let responseString = String(data: data, encoding: .utf8) {
                 print("📄 Raw weather response: \(responseString)")
             }
             throw WeatherError.decodingError(decodingError)
         } catch {
-            print("❌ Unexpected error: \(error)")
-            throw error
+            print("❌ Weather network error: \(error)")
+            throw WeatherError.networkError(error)
         }
     }
     

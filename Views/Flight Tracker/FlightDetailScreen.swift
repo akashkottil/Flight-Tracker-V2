@@ -1375,75 +1375,29 @@ struct FlightDetailScreen: View {
     }
     
     private func errorView(_ message: String) -> some View {
-        ZStack {
-            VStack(alignment: .leading, spacing: 20) {
-                Spacer()
-                
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 50))
-                    .foregroundColor(.orange)
-                    .frame(width: 80, height: 80)
-                
-                Text("Error Loading Flight Details")
-                    .font(.system(size: 32))
-                    .fontWeight(.bold)
-                
-                Text(message)
-                    .font(.system(size: 16))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.leading)
-                
-                VStack(spacing: 12) {
-                    // Retry Button
-                    Button(action: {
-                        Task {
-                            await fetchFlightDetails()
-                        }
-                    }) {
-                        HStack {
-                            Text("Retry")
-                                .fontWeight(.bold)
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.orange) // You can replace with GradientColor.DeleteRed or your preferred gradient
-                        )
-                    }
-                    
-                    // Optional: Add a dismiss/cancel button if needed
-                    Button(action: {
-                        // Add dismiss action if needed
-                    }) {
-                        HStack {
-                            Text("Dismiss")
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity, minHeight: 52)
-                                .background(Color.clear)
-                                .overlay(
-                                    Color.orange // You can replace with GradientColor.DeleteRed
-                                        .mask(
-                                            Text("Dismiss")
-                                                .fontWeight(.bold)
-                                                .frame(width: 332, height: 52)
-                                        )
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 50))
+                .foregroundColor(.orange)
+            Text("Error loading flight details")
+                .font(.system(size: 18, weight: .semibold))
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Button("Retry") {
+                Task {
+                    await fetchFlightDetails()
                 }
-                
-                Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 50)
-            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.orange)
+            .foregroundColor(.white)
+            .cornerRadius(8)
+            Spacer()
         }
-        .ignoresSafeArea()
-        .background(
-            GradientColor.transparentWhite // Match the background from FADelete
-        )
     }
     
     private func flightDetailContent(_ flight: FlightDetail) -> some View {
@@ -2134,4 +2088,7 @@ struct ShimmerModifier: ViewModifier {
     }
 }
 
-
+//#Preview {
+//    FlightTrackNetworkManager.shared.useMockData = true
+//    return FlightDetailScreen(flightNumber: "6E703", date: "20250618")
+//}
