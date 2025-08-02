@@ -1665,6 +1665,10 @@ struct FlightDetailScreen: View {
                 AirlinesInfo(airline: flight.airline)
                 
                 AboutDestination(flight: flight)
+                    .onAppear {
+                        print("🌍 About destination loaded for: \(flight.arrival.airport.city ?? flight.arrival.airport.name)")
+                        print("📍 Coordinates: \(flight.arrival.airport.location.lat), \(flight.arrival.airport.location.lng)")
+                    }
                 
                 // Notification & Delete section (keeping original design)
                 VStack(alignment: .leading, spacing: 12) {
