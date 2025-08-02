@@ -827,6 +827,16 @@ struct FlightTrackerScreen: View {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(Color.black.opacity(0.3), lineWidth: 1)
             )
+            .overlay(
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    UserDebugPanel()
+                                }
+                                Spacer()
+                            }
+                            .padding()
+                        )
             .onTapGesture {
                 openTrackLocationSheet(source: .trackedTab)
             }
@@ -1129,7 +1139,7 @@ struct FlightTrackerScreen: View {
 
                 Spacer()
 
-                Text("To")
+                Text(selectedFlightType == 0 ? "To" : "From")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.gray)
 
